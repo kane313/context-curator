@@ -50,7 +50,7 @@ def patterns: [
 # 用户打断：AI 走偏的强信号。实测 32% 的会话出现过
 | [ to_entries[]
     | select(.value.type == "user")
-    | select((.value.message.content | if type == "string" then . else "" end)
+    | select((.value | human_text)
              | test("^\\[Request interrupted"))
     | {type: "interrupt", w: 3, line: (.key + 1), snippet: "用户打断了执行"} ] as $intr
 # 资产改动：权重仅 1，因为绝大多数是 AI 自己写文档

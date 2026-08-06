@@ -51,6 +51,8 @@ assert_eq "5" "$(echo "$out" | jq -r '.breakdown.correction // 0')" "命中 corr
 assert_eq "5" "$(echo "$out" | jq -r '.breakdown.memory_intent // 0')" "命中 memory_intent 得 5 分"
 assert_eq "1" "$(echo "$out" | jq -r '.breakdown.asset_edit // 0')" "asset_edit 权重仅 1"
 assert_eq "false" "$(echo "$out" | jq -r '[.hits[].snippet] | any(test("^继续$"))')" "「继续」被判为噪声不计分"
+assert_eq "3" "$(echo "$out" | jq -r '.breakdown.interrupt // 0')" "array 形态的用户打断被正确识别，得 3 分"
+assert_eq "2" "$(echo "$out" | jq -r '.human_count')" "打断记录无 origin，不计入 human_count（仍为 2）"
 
 out=$(jq -s -c -f "$SCAN" "$FIXTURES/noise-only.jsonl")
 assert_eq "0" "$(echo "$out" | jq -r '.score')" "纯流程会话得 0 分（human_count=0）"
