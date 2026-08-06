@@ -1,0 +1,4 @@
+{"type":"user","isSidechain":false,"message":{"role":"user","content":"<local-command-caveat>Caveat: The messages below were generated"}}
+{"type":"user","isSidechain":false,"message":{"role":"user","content":"<command-message>client-harness:build</command-message>"}}
+{"type":"user","isSidechain":false,"message":{"role":"user","content":"以后每次改完都必须跑一遍 analyze"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"好的"}]}}
