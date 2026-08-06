@@ -46,48 +46,72 @@
 
 ## 安装
 
-需要 Node 18 或更高（用到内置的 `node:test`）。macOS / Linux / Windows 都支持。
+只需要 Node 18 或更高，没有任何其他依赖。macOS / Linux / Windows 都支持。
 
-```bash
-git clone https://github.com/kane313/context-curator.git ~/.claude/skills/context-curator
+### Claude Code（推荐）
+
+```
+/plugin marketplace add kane313/context-curator
+/plugin install context-curator
 ```
 
-在 `~/.claude/settings.json` 的 `hooks` 里加上（路径按你的实际用户名改）：
+装完就齐了——skill、`/curate` 命令、`SessionEnd` hook 全部自动生效，**不需要手改 `settings.json`**。
+
+### Codex
+
+Codex 从 `~/.agents/skills/` 加载 skill，把仓库里的 skill 目录放进去即可：
+
+```bash
+git clone https://github.com/kane313/context-curator.git ~/.local/share/context-curator
+ln -s ~/.local/share/context-curator/skills/context-curator ~/.agents/skills/context-curator
+```
+
+想要会话结束自动攒线索，在 `~/.codex/hooks.json` 里加上（路径换成你的实际路径）：
 
 ```json
-"SessionEnd": [
-  {
-    "hooks": [
+{
+  "hooks": {
+    "SessionEnd": [
       {
-        "type": "command",
-        "command": "node",
-        "args": ["/Users/YOUR_NAME/.claude/skills/context-curator/bin/scan-session.js"],
-        "timeout": 5
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["/绝对路径/context-curator/skills/context-curator/bin/scan-session.js"],
+            "timeout": 5
+          }
+        ]
       }
     ]
   }
-]
+}
 ```
 
-Windows 上 `args` 里的路径用 `C:\\Users\\YOUR_NAME\\.claude\\skills\\context-curator\\bin\\scan-session.js` 这样的形式（或正斜杠 `C:/Users/...`，Node 两种都认）。
+不配 hook 也能用，只是要靠 `/curate 全量` 手动扫。
 
-想要 `/curate` 斜杠命令的话，把仓库里的 `curate.md` 拷到 `~/.claude/commands/`。
+### 手动安装（任意 agent）
 
-验证安装：
+`skills/context-curator/` 这个目录是自包含的——`SKILL.md` 和它调用的全部脚本都在里面，直接放进你的 agent 的 skill 目录即可。`/curate` 命令在 `commands/curate.md`。
+
+### 验证安装
 
 ```bash
-cd ~/.claude/skills/context-curator
+cd <skill 目录>
 node --test   # 应输出「pass 40」「fail 0」
 ```
 
 ## 跨平台
 
-macOS / Linux / Windows 都支持。全部实现是纯 Node 内置模块（`node:fs`、`node:path`、`node:crypto` 等），零 npm 依赖，路径处理交给 `node:path`，不依赖 shell 通配符展开或 `sed`/`find` 等命令行工具。
+全部实现是纯 Node 内置模块（`node:fs`、`node:path`、`node:crypto`），零 npm 依赖。路径处理交给 `node:path`，不依赖 shell 通配符展开，也不用 `sed` / `find` / `jq` 之类的命令行工具。
 
-- Windows 用户**不需要**安装 Git Bash，也**不需要**装 jq——hook 直接用 `node` 执行 `.js` 脚本，跟 macOS / Linux 是同一份代码。
-- hook 配置统一用 exec form（`command` 传可执行文件、`args` 传参数数组），不依赖 shebang（`#!/usr/bin/env node`）或可执行位，Windows 上不支持 shebang 的问题不复存在。
+- Windows 用户**不需要** Git Bash，也**不需要**装 jq——hook 直接用 `node` 执行 `.js`，跟 macOS / Linux 是同一份代码。
+- hook 统一用 exec form（`command` 传可执行文件、`args` 传数组），不依赖 shebang 或可执行位。
+- Claude Code 与 Codex 的 `SessionEnd` hook payload 字段一致（`session_id` / `transcript_path` / `cwd`），所以两边共用同一个 `scan-session.js`。
 
-**诚实说明**：Windows 平台目前只经过代码层面的跨平台处理（路径分隔符、无 shell 通配符依赖等），**尚未在真实 Windows 机器上实机验证过**。如果你在 Windows 上用起来遇到问题，欢迎在仓库提 issue 反馈。
+**两条诚实说明**：
+
+1. **Windows 尚未实机验证。** 目前只做了代码层面的跨平台处理，没有在真实 Windows 机器上跑过。遇到问题欢迎提 issue。
+2. **Codex 的会话记录格式尚未验证。** 信号提取是照着 Claude Code 的 transcript 格式写的。如果 Codex 的格式不同，hook 会因为解析不出真人输入而判 0 分、安静跳过——不会报错，但也不会有线索入队。这种情况下 `/curate 当下`（只分析当前对话）仍然可用。有 Codex 会话样本的话欢迎提 issue，我可以补上格式适配。
 
 ## 怎么用
 
@@ -145,15 +169,23 @@ macOS / Linux / Windows 都支持。全部实现是纯 Node 内置模块（`node
 ## 文件
 
 ```
-SKILL.md              主体流程：三种模式、路由规则、确认协议
-lib/scan.js           提取真人输入 + 信号打分（hook 与 harvest 共用同一份）
-lib/paths.js          跨平台项目定位、slug 推导
-lib/store.js          队列、状态与拒绝指纹的读写
-bin/scan-session.js   SessionEnd hook 入口
-bin/harvest.js        批量粗筛，供全量模式用
-bin/state.js          队列状态与拒绝指纹 CLI
-test/                 node:test 用例 + 三份 fixture + 回归比对记录
+.claude-plugin/marketplace.json   Claude Code 插件市场清单（source 指向仓库根）
+.claude-plugin/plugin.json        Claude Code 插件元数据
+.codex-plugin/plugin.json         Codex 插件元数据
+hooks/hooks.json                  插件自带的 SessionEnd hook（装完即生效）
+commands/curate.md                /curate 斜杠命令
+skills/context-curator/           ← 自包含的 skill，可整个搬进任何 agent 的 skill 目录
+├── SKILL.md                      主体流程：三种模式、路由规则、确认协议
+├── lib/scan.js                   提取真人输入 + 信号打分（hook 与 harvest 共用同一份）
+├── lib/paths.js                  跨平台项目定位、slug 推导 + cwd 反查
+├── lib/store.js                  队列、状态与拒绝指纹的读写
+├── bin/scan-session.js           SessionEnd hook 入口
+├── bin/harvest.js                批量粗筛，供全量模式用
+├── bin/state.js                  队列状态与拒绝指纹 CLI
+└── test/                         node:test 用例 + 三份 fixture + 回归比对记录
 ```
+
+`skills/context-curator/` 刻意做成自包含的——脚本和 `SKILL.md` 放在一起，所以它既能作为 Claude 插件的一部分被加载，也能单独拷进 `~/.agents/skills/` 给 Codex 用，不用改任何路径。
 
 数据落在 `~/.claude/projects/<项目slug>/context-curator/`，与 memory 同级，不污染你的项目仓库：
 
@@ -184,7 +216,8 @@ test/                 node:test 用例 + 三份 fixture + 回归比对记录
 
 | 现象 | 检查 |
 |---|---|
-| 队列一直是空的 | `node -e 'console.log(JSON.stringify(require(require("os").homedir()+"/.claude/settings.json").hooks.SessionEnd))'` 确认 hook 已注册；再手动喂一条 payload 给 `bin/scan-session.js` 看结果 |
+| 队列一直是空的 | 用插件装的话 hook 由 `hooks/hooks.json` 提供，跑 `/plugin` 看插件是否已启用；手动配的话确认 `~/.claude/settings.json`（或 Codex 的 `~/.codex/hooks.json`）里有 `SessionEnd`。再手动喂一条 payload 给 `bin/scan-session.js` 看结果 |
+| 装了插件又手配过 hook | 两个 hook 会都触发，但 `scan-session.js` 对同一 session 是幂等的，不会重复入队。想干净就删掉手配的那份 |
 | 会话结束卡顿 | 实测 1.7MB 会话仅 0.03s、2.0MB 会话 0.1s。若卡顿先确认 `timeout: 5` 配上了 |
 | 找不到队列目录 | 多半是项目路径含下划线，确认用的是「非字母数字全换 `-`」的 slug 规则 |
 | 想临时关掉 | 从 `settings.json` 删掉 `SessionEnd` 段即可，已有队列文件不受影响 |

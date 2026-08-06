@@ -1,0 +1,34 @@
+{
+  "name": "context-curator",
+  "version": "1.0.0",
+  "description": "把会话里产生的知识沉淀成项目上下文资产（CLAUDE.md / memory / docs / skills）。会话结束时零 token 粗筛攒线索，主动唤起时逐条确认后才写入。",
+  "author": {
+    "name": "kane313",
+    "url": "https://github.com/kane313"
+  },
+  "homepage": "https://github.com/kane313/context-curator",
+  "repository": "https://github.com/kane313/context-curator",
+  "license": "MIT",
+  "keywords": [
+    "context",
+    "memory",
+    "knowledge-capture",
+    "session-history",
+    "documentation"
+  ],
+  "skills": "./skills/",
+  "hooks": {
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CODEX_PLUGIN_ROOT}/skills/context-curator/bin/scan-session.js"],
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/skills/context-curator/bin/scan-session.js"],
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

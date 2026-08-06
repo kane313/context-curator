@@ -1,0 +1,21 @@
+{
+  "name": "context-curator",
+  "description": "把会话里产生的知识沉淀成项目上下文资产（CLAUDE.md / memory / docs / skills）。会话结束时用纯 Node 零 token 粗筛出高信号线索攒进队列；你主动唤起时派子 agent 精读、比对现有资产，逐条确认后才写入。三条铁律：没有确认就不写、没有证据就不提、拒绝过的不再提。",
+  "version": "1.0.0",
+  "author": {
+    "name": "kane313",
+    "url": "https://github.com/kane313"
+  },
+  "homepage": "https://github.com/kane313/context-curator",
+  "repository": "https://github.com/kane313/context-curator",
+  "license": "MIT",
+  "keywords": [
+    "context",
+    "memory",
+    "knowledge-capture",
+    "claude-md",
+    "session-history",
+    "documentation",
+    "cross-platform"
+  ]
+}

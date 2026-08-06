@@ -25,12 +25,36 @@ description: Use when the user wants to consolidate knowledge from past sessions
 
 ## 执行步骤
 
+### 第 0 步：确定本 skill 的目录
+
+后面的命令都要调用本 skill 自带的脚本，先确定它们在哪。本 skill 可能装在三种位置之一（Claude 插件缓存 / `~/.claude/skills/` / Codex 的 `~/.agents/skills/`），所以不要写死路径。
+
+加载本 skill 时，运行环境通常会告诉你它的 base directory（形如 `Base directory for this skill: /some/path/skills/context-curator`）——那就是 `$CCH`。若环境没告知，用这条命令探测：
+
+```bash
+CCH=$(node -e '
+const fs=require("fs"),os=require("os"),path=require("path");
+const h=os.homedir(),hit=[];
+const push=p=>{try{if(p&&fs.existsSync(path.join(p,"lib","scan.js")))hit.push(p)}catch{}};
+push(process.env.CLAUDE_PLUGIN_ROOT&&path.join(process.env.CLAUDE_PLUGIN_ROOT,"skills","context-curator"));
+push(process.env.CODEX_PLUGIN_ROOT&&path.join(process.env.CODEX_PLUGIN_ROOT,"skills","context-curator"));
+push(path.join(h,".claude","skills","context-curator"));
+push(path.join(h,".agents","skills","context-curator"));
+const walk=(d,depth)=>{if(depth>4)return;let es=[];try{es=fs.readdirSync(d,{withFileTypes:true})}catch{return}
+  for(const e of es){if(!e.isDirectory())continue;const q=path.join(d,e.name);
+    push(path.join(q,"skills","context-curator"));walk(q,depth+1)}};
+walk(path.join(h,".claude","plugins","cache"),0);
+console.log(hit[0]||"")')
+```
+
+探测不到就告诉用户 skill 安装不完整，然后停止。
+
 ### 第 1 步：定位项目目录
 
 Claude Code 把项目目录名里所有非字母数字字符都换成 `-`（下划线也不例外）。项目定位、slug 推导、找不到时按会话记录里的 `cwd` 字段反查——这套逻辑已经封装进 `lib/paths.js`，跑这一条命令，输出即 `$CC`：
 
 ```bash
-node -e 'const p=require(require("os").homedir()+"/.claude/skills/context-curator/lib/paths"); const d=p.findProjectDir(process.cwd()); console.log(d?p.curatorDir(d):"")'
+node -e 'const p=require(process.argv[1]+"/lib/paths"); const d=p.findProjectDir(process.cwd()); console.log(d?p.curatorDir(d):"")' "$CCH"
 ```
 
 输出为空表示 `findProjectDir` 返回了 `null`——这个项目从没跑过 Claude Code 会话，没有会话记录可供沉淀。此时告诉用户「这个项目还没有会话记录可供沉淀」，然后停止。**不要**为了有产出去编造知识——这跟前面的三条铁律是一回事。
@@ -46,7 +70,7 @@ node -e 'const fs=require("fs"),path=require("path");const q=path.join(process.a
 
 **全量模式：**
 ```bash
-node ~/.claude/skills/context-curator/bin/harvest.js $PROJ
+node "$CCH"/bin/harvest.js $PROJ
 ```
 
 **当下模式：** 直接回顾当前对话，跳到第 3 步。
@@ -99,8 +123,8 @@ node ~/.claude/skills/context-curator/bin/harvest.js $PROJ
 落地前先过滤已拒绝的：
 
 ```bash
-FP=$(node ~/.claude/skills/context-curator/bin/state.js fingerprint "<目标文件>" "<类型>" "<要点>")
-node ~/.claude/skills/context-curator/bin/state.js is-rejected $CC "$FP" && echo "已拒绝过，跳过"
+FP=$(node "$CCH"/bin/state.js fingerprint "<目标文件>" "<类型>" "<要点>")
+node "$CCH"/bin/state.js is-rejected $CC "$FP" && echo "已拒绝过，跳过"
 ```
 
 每条这样呈现，一次一条：
@@ -119,8 +143,8 @@ node ~/.claude/skills/context-curator/bin/state.js is-rejected $CC "$FP" && echo
 ### 第 8 步：落地与收尾
 
 - 只写用户回 y 的
-- 用户回 n：`node ~/.claude/skills/context-curator/bin/state.js reject $CC "$FP" "<目标文件>" "<要点>"`
-- 处理完一个会话：`node ~/.claude/skills/context-curator/bin/state.js done $CC "<session_id>"`
+- 用户回 n：`node "$CCH"/bin/state.js reject $CC "$FP" "<目标文件>" "<要点>"`
+- 处理完一个会话：`node "$CCH"/bin/state.js done $CC "<session_id>"`
 - 最后报一句：采纳几条、拒绝几条、分别落到哪些文件
 
 ## 反模式

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "context-curator",
+  "description": "Turn your session history into maintained project context assets.",
+  "owner": {
+    "name": "kane313",
+    "url": "https://github.com/kane313"
+  },
+  "plugins": [
+    {
+      "name": "context-curator",
+      "description": "把会话里产生的知识沉淀成项目上下文资产（CLAUDE.md / memory / docs / skills）。会话结束时零 token 后台粗筛攒线索，你主动唤起时逐条确认后才写入。",
+      "category": "productivity",
+      "source": "./"
+    }
+  ]
+}
