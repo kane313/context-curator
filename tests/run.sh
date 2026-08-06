@@ -95,5 +95,24 @@ echo '{"session_id":"x","transcript_path":"/nope/missing.jsonl"}' | bash "$HOOK"
 echo '{}' | bash "$HOOK"; assert_eq "0" "$?" "空对象也返回 0"
 assert_eq "1" "$(wc -l < "$QUEUE" | tr -d ' ')" "坏输入不污染队列"
 
+printf '\n[Task6] 批量粗筛\n'
+HARVEST="$SKILL_DIR/scripts/harvest.sh"
+
+mkdir -p "$TMP/batch"
+cp "$FIXTURES/new-format.jsonl" "$TMP/batch/aaa.jsonl"
+cp "$FIXTURES/old-format.jsonl" "$TMP/batch/bbb.jsonl"
+cp "$FIXTURES/noise-only.jsonl" "$TMP/batch/ccc.jsonl"
+
+out=$(bash "$HARVEST" "$TMP/batch")
+assert_eq "2" "$(echo "$out" | grep -c .)" "只输出有信号的 2 个会话"
+assert_eq "aaa" "$(echo "$out" | head -1 | jq -r '.session_id')" "按分数降序，aaa 在前"
+assert_eq "false" "$(echo "$out" | jq -s -r '[.[].session_id] | any(. == "ccc")')" "零分会话不输出"
+
+out=$(bash "$HARVEST" "$TMP/batch" --min-score 100)
+assert_eq "0" "$(echo "$out" | grep -c . || true)" "--min-score 过滤生效"
+
+out=$(bash "$HARVEST" "/nonexistent/dir" 2>/dev/null; echo "rc=$?")
+assert_contains "$out" "rc=0" "目录不存在也返回 0"
+
 printf '\n通过 %d，失败 %d\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
