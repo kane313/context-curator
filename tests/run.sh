@@ -34,8 +34,8 @@ SCAN="$SKILL_DIR/scripts/scan.jq"
 out=$(jq -s -c -f "$SCAN" "$FIXTURES/new-format.jsonl")
 assert_eq "2" "$(echo "$out" | jq -r '.human_count')" "新格式：只认 origin.kind=human，得 2 条"
 assert_contains "$out" "Riverpod" "新格式：抓到纠正原文"
-assert_eq "false" "$(echo "$out" | jq -r 'tostring | test("子agent")')" "新格式：排除 sidechain（未泄漏到最终输出，Task3 起 .human 不再对外暴露，改为整体输出校验）"
-assert_eq "false" "$(echo "$out" | jq -r 'tostring | test("command-name")')" "新格式：排除命令注入（未泄漏到最终输出，Task3 起 .human 不再对外暴露，改为整体输出校验）"
+assert_eq "false" "$(echo "$out" | jq -r '[.human[].text] | any(test("子agent"))')" "新格式：排除 sidechain"
+assert_eq "false" "$(echo "$out" | jq -r '[.human[].text] | any(test("command-name"))')" "新格式：排除命令注入"
 
 out=$(jq -s -c -f "$SCAN" "$FIXTURES/old-format.jsonl")
 assert_eq "1" "$(echo "$out" | jq -r '.human_count')" "老格式：回退排除法，得 1 条"

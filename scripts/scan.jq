@@ -71,4 +71,5 @@ def patterns: [
 | {score: $score,
    human_count: ($human | length),
    breakdown: ([ $by[] | {(.type): (.w * (if .n > 3 then 3 else .n end))} ] | add // {}),
-   hits: [ $hits[] | del(.w) ]}
+   hits: [ $hits[] | del(.w) ],
+   human: $human}
