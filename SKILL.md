@@ -27,11 +27,27 @@ description: Use when the user wants to consolidate knowledge from past sessions
 
 ### 第 1 步：定位项目目录
 
+Claude Code 把项目目录名里所有非字母数字字符都换成 `-`（下划线也不例外），推导 slug 必须照此规则：
+
 ```bash
-SLUG=$(pwd | sed 's|/|-|g')
+SLUG=$(pwd | sed 's|[^a-zA-Z0-9]|-|g')
 PROJ=~/.claude/projects/$SLUG
 CC=$PROJ/context-curator
 ```
+
+这条规则是从真实目录名逆向出来的，未来可能变。`$PROJ` 不存在时不要直接判失败，按会话记录里的 `cwd` 字段反查真实目录：
+
+```bash
+if [ ! -d "$PROJ" ]; then
+  PROJ=$(for d in ~/.claude/projects/*/; do
+    f=$(find "$d" -maxdepth 1 -name '*.jsonl' -type f 2>/dev/null | head -1)
+    [ -n "$f" ] && [ "$(jq -s -r 'map(select(.cwd)) | .[0].cwd // empty' "$f" 2>/dev/null)" = "$(pwd)" ] && echo "${d%/}" && break
+  done)
+  CC=$PROJ/context-curator
+fi
+```
+
+兜底也找不到（`$PROJ` 仍为空）说明这个项目从没跑过 Claude Code 会话：告诉用户「这个项目还没有会话记录可供沉淀」，然后停止。**不要**为了有产出去编造知识——这跟前面的三条铁律是一回事。
 
 ### 第 2 步：取线索
 
