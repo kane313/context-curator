@@ -1,4 +1,0 @@
-{"type":"user","isSidechain":false,"message":{"role":"user","content":"<command-message>client-harness:build</command-message>"}}
-{"type":"user","isSidechain":false,"message":{"role":"user","content":[{"type":"tool_result","content":"done"}]}}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Write","input":{"file_path":"/p/docs/a.md"}}]}}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Write","input":{"file_path":"/p/docs/b.md"}}]}}

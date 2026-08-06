@@ -27,38 +27,26 @@ description: Use when the user wants to consolidate knowledge from past sessions
 
 ### 第 1 步：定位项目目录
 
-Claude Code 把项目目录名里所有非字母数字字符都换成 `-`（下划线也不例外），推导 slug 必须照此规则：
+Claude Code 把项目目录名里所有非字母数字字符都换成 `-`（下划线也不例外）。项目定位、slug 推导、找不到时按会话记录里的 `cwd` 字段反查——这套逻辑已经封装进 `lib/paths.js`，跑这一条命令，输出即 `$CC`：
 
 ```bash
-SLUG=$(pwd | sed 's|[^a-zA-Z0-9]|-|g')
-PROJ=~/.claude/projects/$SLUG
-CC=$PROJ/context-curator
+node -e 'const p=require(require("os").homedir()+"/.claude/skills/context-curator/lib/paths"); const d=p.findProjectDir(process.cwd()); console.log(d?p.curatorDir(d):"")'
 ```
 
-这条规则是从真实目录名逆向出来的，未来可能变。`$PROJ` 不存在时不要直接判失败，按会话记录里的 `cwd` 字段反查真实目录：
+输出为空表示 `findProjectDir` 返回了 `null`——这个项目从没跑过 Claude Code 会话，没有会话记录可供沉淀。此时告诉用户「这个项目还没有会话记录可供沉淀」，然后停止。**不要**为了有产出去编造知识——这跟前面的三条铁律是一回事。
 
-```bash
-if [ ! -d "$PROJ" ]; then
-  PROJ=$(for d in ~/.claude/projects/*/; do
-    f=$(find "$d" -maxdepth 1 -name '*.jsonl' -type f 2>/dev/null | head -1)
-    [ -n "$f" ] && [ "$(jq -s -r 'map(select(.cwd)) | .[0].cwd // empty' "$f" 2>/dev/null)" = "$(pwd)" ] && echo "${d%/}" && break
-  done)
-  CC=$PROJ/context-curator
-fi
-```
-
-兜底也找不到（`$PROJ` 仍为空）说明这个项目从没跑过 Claude Code 会话：告诉用户「这个项目还没有会话记录可供沉淀」，然后停止。**不要**为了有产出去编造知识——这跟前面的三条铁律是一回事。
+输出非空时，把它记作 `$CC`（下文命令里出现的 `$CC` 就是这个路径）；`$CC` 去掉末尾的 `context-curator` 就是 `$PROJ`（该项目的会话目录，全量模式要用）。继续第 2 步。
 
 ### 第 2 步：取线索
 
 **结算模式：**
 ```bash
-jq -c 'select(.status == "pending")' $CC/queue.jsonl | jq -s -c 'sort_by(-.score) | .[]'
+node -e 'const fs=require("fs"),path=require("path");const q=path.join(process.argv[1],"queue.jsonl");const rows=fs.readFileSync(q,"utf8").split("\n").filter(Boolean).map(l=>{try{return JSON.parse(l)}catch{return null}}).filter(Boolean);rows.filter(r=>r.status==="pending").sort((a,b)=>b.score-a.score).forEach(r=>console.log(JSON.stringify(r)))' $CC
 ```
 
 **全量模式：**
 ```bash
-~/.claude/skills/context-curator/scripts/harvest.sh $PROJ
+node ~/.claude/skills/context-curator/bin/harvest.js $PROJ
 ```
 
 **当下模式：** 直接回顾当前对话，跳到第 3 步。
@@ -111,8 +99,8 @@ jq -c 'select(.status == "pending")' $CC/queue.jsonl | jq -s -c 'sort_by(-.score
 落地前先过滤已拒绝的：
 
 ```bash
-FP=$(~/.claude/skills/context-curator/scripts/state.sh fingerprint "<目标文件>" "<类型>" "<要点>")
-~/.claude/skills/context-curator/scripts/state.sh is-rejected $CC "$FP" && echo "已拒绝过，跳过"
+FP=$(node ~/.claude/skills/context-curator/bin/state.js fingerprint "<目标文件>" "<类型>" "<要点>")
+node ~/.claude/skills/context-curator/bin/state.js is-rejected $CC "$FP" && echo "已拒绝过，跳过"
 ```
 
 每条这样呈现，一次一条：
@@ -131,8 +119,8 @@ FP=$(~/.claude/skills/context-curator/scripts/state.sh fingerprint "<目标文�
 ### 第 8 步：落地与收尾
 
 - 只写用户回 y 的
-- 用户回 n：`state.sh reject $CC "$FP" "<目标文件>" "<要点>"`
-- 处理完一个会话：`state.sh done $CC "<session_id>"`
+- 用户回 n：`node ~/.claude/skills/context-curator/bin/state.js reject $CC "$FP" "<目标文件>" "<要点>"`
+- 处理完一个会话：`node ~/.claude/skills/context-curator/bin/state.js done $CC "<session_id>"`
 - 最后报一句：采纳几条、拒绝几条、分别落到哪些文件
 
 ## 反模式

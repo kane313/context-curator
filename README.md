@@ -23,7 +23,7 @@
 ## 工作方式
 
 ```
-会话结束 → SessionEnd hook → jq 粗筛 → queue.jsonl        （零 token，不打扰）
+会话结束 → SessionEnd hook → Node 粗筛 → queue.jsonl       （零 token，不打扰）
                                               ↓
    你说「沉淀一下」/curate → 读队列 → 子 agent 精读高分会话 → 候选知识
                                               ↓
@@ -34,7 +34,7 @@
                     逐条呈现 → 你 y/n/e → 只写批准的
 ```
 
-会话结束时跑的是纯 shell + jq，**不调用任何模型、不消耗 token、不写任何资产文件**，只把高信号线索追加进队列。真正的分析发生在你主动唤起时。
+会话结束时跑的是纯 Node 内置模块，**不调用任何模型、不消耗 token、不写任何资产文件**，只把高信号线索追加进队列。真正的分析发生在你主动唤起时。
 
 三种模式：
 
@@ -46,11 +46,10 @@
 
 ## 安装
 
-需要 `jq`（macOS 自带 `/usr/bin/jq`；Linux 用包管理器装）。
+需要 Node 18 或更高（用到内置的 `node:test`）。macOS / Linux / Windows 都支持。
 
 ```bash
 git clone https://github.com/kane313/context-curator.git ~/.claude/skills/context-curator
-chmod +x ~/.claude/skills/context-curator/scripts/*.sh
 ```
 
 在 `~/.claude/settings.json` 的 `hooks` 里加上（路径按你的实际用户名改）：
@@ -61,7 +60,8 @@ chmod +x ~/.claude/skills/context-curator/scripts/*.sh
     "hooks": [
       {
         "type": "command",
-        "command": "/Users/YOUR_NAME/.claude/skills/context-curator/scripts/scan-session.sh",
+        "command": "node",
+        "args": ["/Users/YOUR_NAME/.claude/skills/context-curator/bin/scan-session.js"],
         "timeout": 5
       }
     ]
@@ -69,13 +69,25 @@ chmod +x ~/.claude/skills/context-curator/scripts/*.sh
 ]
 ```
 
+Windows 上 `args` 里的路径用 `C:\\Users\\YOUR_NAME\\.claude\\skills\\context-curator\\bin\\scan-session.js` 这样的形式（或正斜杠 `C:/Users/...`，Node 两种都认）。
+
 想要 `/curate` 斜杠命令的话，把仓库里的 `curate.md` 拷到 `~/.claude/commands/`。
 
 验证安装：
 
 ```bash
-bash ~/.claude/skills/context-curator/tests/run.sh   # 应输出「通过 45，失败 0」
+cd ~/.claude/skills/context-curator
+node --test   # 应输出「pass 40」「fail 0」
 ```
+
+## 跨平台
+
+macOS / Linux / Windows 都支持。全部实现是纯 Node 内置模块（`node:fs`、`node:path`、`node:crypto` 等），零 npm 依赖，路径处理交给 `node:path`，不依赖 shell 通配符展开或 `sed`/`find` 等命令行工具。
+
+- Windows 用户**不需要**安装 Git Bash，也**不需要**装 jq——hook 直接用 `node` 执行 `.js` 脚本，跟 macOS / Linux 是同一份代码。
+- hook 配置统一用 exec form（`command` 传可执行文件、`args` 传参数数组），不依赖 shebang（`#!/usr/bin/env node`）或可执行位，Windows 上不支持 shebang 的问题不复存在。
+
+**诚实说明**：Windows 平台目前只经过代码层面的跨平台处理（路径分隔符、无 shell 通配符依赖等），**尚未在真实 Windows 机器上实机验证过**。如果你在 Windows 上用起来遇到问题，欢迎在仓库提 issue 反馈。
 
 ## 怎么用
 
@@ -133,12 +145,14 @@ bash ~/.claude/skills/context-curator/tests/run.sh   # 应输出「通过 45，�
 ## 文件
 
 ```
-SKILL.md                 主体流程：三种模式、路由规则、确认协议
-scripts/scan.jq          提取真人输入 + 信号打分（hook 与 harvest 共用同一份）
-scripts/scan-session.sh  SessionEnd hook 入口
-scripts/harvest.sh       批量粗筛，供全量模式用
-scripts/state.sh         队列状态与拒绝指纹
-tests/run.sh             45 条断言 + 三份 fixture
+SKILL.md              主体流程：三种模式、路由规则、确认协议
+lib/scan.js           提取真人输入 + 信号打分（hook 与 harvest 共用同一份）
+lib/paths.js          跨平台项目定位、slug 推导
+lib/store.js          队列、状态与拒绝指纹的读写
+bin/scan-session.js   SessionEnd hook 入口
+bin/harvest.js        批量粗筛，供全量模式用
+bin/state.js          队列状态与拒绝指纹 CLI
+test/                 node:test 用例 + 三份 fixture + 回归比对记录
 ```
 
 数据落在 `~/.claude/projects/<项目slug>/context-curator/`，与 memory 同级，不污染你的项目仓库：
@@ -164,26 +178,27 @@ tests/run.sh             45 条断言 + 三份 fixture
 
 长度小于 6 且命中「继续/下一步/跑/整理/好的/嗯/ok」的纯推进指令判为噪声，不计分——实测这类占真人输入的三成。
 
-**正则以中文为主**，英文只覆盖了 `no,` / `wrong` / `remember` 等少数几个。英文会话用户建议自行扩充 `scripts/scan.jq` 里的 `patterns` 定义。
+**正则以中文为主**，英文只覆盖了 `no,` / `wrong` / `remember` 等少数几个。英文会话用户建议自行扩充 `lib/scan.js` 里的 `patterns` 定义。
 
 ## 排障
 
 | 现象 | 检查 |
 |---|---|
-| 队列一直是空的 | `jq -e '.hooks.SessionEnd' ~/.claude/settings.json` 确认 hook 已注册；再手动喂一条 payload 给 `scan-session.sh` 看结果 |
+| 队列一直是空的 | `node -e 'console.log(JSON.stringify(require(require("os").homedir()+"/.claude/settings.json").hooks.SessionEnd))'` 确认 hook 已注册；再手动喂一条 payload 给 `bin/scan-session.js` 看结果 |
 | 会话结束卡顿 | 实测 1.7MB 会话仅 0.03s、2.0MB 会话 0.1s。若卡顿先确认 `timeout: 5` 配上了 |
 | 找不到队列目录 | 多半是项目路径含下划线，确认用的是「非字母数字全换 `-`」的 slug 规则 |
 | 想临时关掉 | 从 `settings.json` 删掉 `SessionEnd` 段即可，已有队列文件不受影响 |
 
-`jq` 缺失时所有脚本静默 `exit 0`，不会影响你的会话。
+`node` 不在 PATH 里会导致 hook 静默不生效（进程都起不来），不会影响你的会话，但队列也不会有新数据——排查时先确认 `which node` / `where node` 有输出。
 
 ## 开发
 
 ```bash
-bash tests/run.sh
+cd ~/.claude/skills/context-curator
+node --test
 ```
 
-45 条断言，纯 shell 实现，不依赖 bats。改动 `scan.jq` 的信号逻辑后请跑一遍——测试里有变异测试验证过的排除类断言，能抓住排除逻辑被误删。
+40 个用例，纯 `node:test` 实现，零 npm 依赖。改动 `lib/scan.js` 的信号逻辑后请跑一遍——测试里有变异测试验证过的排除类断言，能抓住排除逻辑被误删。
 
 ## License
 
