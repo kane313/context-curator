@@ -141,5 +141,14 @@ bash "$STATE" done "$TMP/st" "s1"
 assert_eq "done" "$(jq -r 'select(.session_id=="s1") | .status' "$TMP/st/queue.jsonl")" "s1 标记为 done"
 assert_eq "pending" "$(jq -r 'select(.session_id=="s2") | .status' "$TMP/st/queue.jsonl")" "s2 保持 pending"
 
+printf '\n[Task9] 安装自检\n'
+assert_eq "0" "$([ -x /usr/bin/jq ] && echo 0 || echo 1)" "jq 可执行"
+assert_eq "0" "$([ -x "$SKILL_DIR/scripts/scan-session.sh" ] && echo 0 || echo 1)" "hook 脚本有可执行权限"
+assert_eq "0" "$([ -x "$SKILL_DIR/scripts/harvest.sh" ] && echo 0 || echo 1)" "harvest 有可执行权限"
+assert_eq "0" "$([ -x "$SKILL_DIR/scripts/state.sh" ] && echo 0 || echo 1)" "state 有可执行权限"
+assert_eq "0" "$([ -f "$SKILL_DIR/SKILL.md" ] && echo 0 || echo 1)" "SKILL.md 存在"
+hookcmd=$(jq -r '.hooks.SessionEnd[0].hooks[0].command // "missing"' ~/.claude/settings.json)
+assert_contains "$hookcmd" "scan-session.sh" "SessionEnd hook 已注册"
+
 printf '\n通过 %d，失败 %d\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
