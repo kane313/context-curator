@@ -63,5 +63,35 @@ done
 assert_eq "15" "$(jq -s -c -f "$SCAN" "$tmpf" | jq -r '.breakdown.correction')" "同类信号封顶 3 次（5×3=15）"
 assert_eq "16" "$(jq -s -c -f "$SCAN" "$tmpf" | jq -r '.score')" "总分 = 1 基础分 + 15"
 
+printf '\n[Task4] hook 入口脚本\n'
+HOOK="$SKILL_DIR/scripts/scan-session.sh"
+
+# 准备一个模拟的项目目录，transcript 放在其中
+mkdir -p "$TMP/proj"
+cp "$FIXTURES/new-format.jsonl" "$TMP/proj/sess-1.jsonl"
+QUEUE="$TMP/proj/context-curator/queue.jsonl"
+
+payload='{"session_id":"sess-1","transcript_path":"'"$TMP"'/proj/sess-1.jsonl","cwd":"/p","hook_event_name":"SessionEnd","reason":"clear"}'
+echo "$payload" | bash "$HOOK"
+assert_eq "1" "$(wc -l < "$QUEUE" | tr -d ' ')" "有信号的会话入队 1 行"
+assert_eq "sess-1" "$(jq -r '.session_id' "$QUEUE")" "记录 session_id"
+assert_eq "pending" "$(jq -r '.status' "$QUEUE")" "初始状态 pending"
+assert_eq "true" "$(jq -r '.score > 0' "$QUEUE")" "分数为正"
+
+# 幂等：同一 session 重复触发不应重复入队
+echo "$payload" | bash "$HOOK"
+assert_eq "1" "$(wc -l < "$QUEUE" | tr -d ' ')" "同一 session 重复触发不重复入队"
+
+# 零分会话不入队
+cp "$FIXTURES/noise-only.jsonl" "$TMP/proj/sess-2.jsonl"
+echo '{"session_id":"sess-2","transcript_path":"'"$TMP"'/proj/sess-2.jsonl","cwd":"/p","reason":"clear"}' | bash "$HOOK"
+assert_eq "1" "$(wc -l < "$QUEUE" | tr -d ' ')" "零分的纯流程会话不入队"
+
+# 容错：各种坏输入都必须 exit 0 且不产生垃圾
+echo 'this is not json' | bash "$HOOK"; assert_eq "0" "$?" "非 JSON 输入也返回 0"
+echo '{"session_id":"x","transcript_path":"/nope/missing.jsonl"}' | bash "$HOOK"; assert_eq "0" "$?" "transcript 不存在也返回 0"
+echo '{}' | bash "$HOOK"; assert_eq "0" "$?" "空对象也返回 0"
+assert_eq "1" "$(wc -l < "$QUEUE" | tr -d ' ')" "坏输入不污染队列"
+
 printf '\n通过 %d，失败 %d\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
