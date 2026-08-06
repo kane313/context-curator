@@ -114,5 +114,32 @@ assert_eq "0" "$(echo "$out" | grep -c . || true)" "--min-score 过滤生效"
 out=$(bash "$HARVEST" "/nonexistent/dir" 2>/dev/null; echo "rc=$?")
 assert_contains "$out" "rc=0" "目录不存在也返回 0"
 
+printf '\n[Task7] 状态与拒绝指纹\n'
+STATE="$SKILL_DIR/scripts/state.sh"
+mkdir -p "$TMP/st"
+
+fp1=$(bash "$STATE" fingerprint "CLAUDE.md" "纠错" "改用 Riverpod")
+fp2=$(bash "$STATE" fingerprint "CLAUDE.md" "纠错" "改用 Riverpod")
+fp3=$(bash "$STATE" fingerprint "CLAUDE.md" "纠错" "改用 Provider")
+assert_eq "$fp1" "$fp2" "同输入指纹稳定"
+assert_eq "false" "$([ "$fp1" = "$fp3" ] && echo true || echo false)" "不同内容指纹不同"
+assert_contains "$fp1" "sha1:" "指纹带 sha1: 前缀"
+
+bash "$STATE" is-rejected "$TMP/st" "$fp1"
+assert_eq "1" "$?" "未拒绝过时返回 1"
+
+bash "$STATE" reject "$TMP/st" "$fp1" "CLAUDE.md" "改用 Riverpod"
+bash "$STATE" is-rejected "$TMP/st" "$fp1"
+assert_eq "0" "$?" "拒绝后返回 0"
+
+bash "$STATE" reject "$TMP/st" "$fp1" "CLAUDE.md" "改用 Riverpod"
+assert_eq "1" "$(jq '.rejected | length' "$TMP/st/state.json")" "重复拒绝不重复记录"
+
+# done 子命令
+printf '{"session_id":"s1","status":"pending"}\n{"session_id":"s2","status":"pending"}\n' > "$TMP/st/queue.jsonl"
+bash "$STATE" done "$TMP/st" "s1"
+assert_eq "done" "$(jq -r 'select(.session_id=="s1") | .status' "$TMP/st/queue.jsonl")" "s1 标记为 done"
+assert_eq "pending" "$(jq -r 'select(.session_id=="s2") | .status' "$TMP/st/queue.jsonl")" "s2 保持 pending"
+
 printf '\n通过 %d，失败 %d\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
