@@ -110,7 +110,7 @@ ln -s ~/.local/share/context-curator/skills/context-init ~/.agents/skills/contex
 
 ```bash
 cd <skill 目录>
-node --test   # 应输出「pass 40」「fail 0」
+node --test   # 应输出「pass 70」「fail 0」
 ```
 
 ## 跨平台
