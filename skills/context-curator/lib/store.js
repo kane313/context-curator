@@ -95,7 +95,15 @@ function markDone(ccDir, sessionId) {
   writeState(ccDir, state);
 }
 
+// 初始化流程完成时记时间戳。刻意不动 queue：初始化挖过的会话仍可被结算模式再看一遍，
+// 结算第 6 步的资产比对会自然去重。
+function markInitialized(ccDir) {
+  const state = readState(ccDir);
+  state.initialized_at = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+  writeState(ccDir, state);
+}
+
 module.exports = {
   fingerprint, readQueue, appendQueue, hasSession,
-  readState, isRejected, reject, markDone,
+  readState, isRejected, reject, markDone, markInitialized,
 };

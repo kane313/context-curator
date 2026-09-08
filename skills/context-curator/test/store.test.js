@@ -43,3 +43,15 @@ test('markDone 只改目标 session', () => {
 test('队列文件不存在时读取返回空数组而不抛', () => {
   assert.deepStrictEqual(S.readQueue(tmpDir('empty')), []);
 });
+
+test('markInitialized 写 initialized_at，不动 rejected 与队列', () => {
+  const d = tmpDir('init');
+  const fp = S.fingerprint('CLAUDE.md', '纠错', 'x');
+  S.reject(d, fp, 'CLAUDE.md', 'x');
+  S.appendQueue(d, { session_id: 's1', status: 'pending' });
+  S.markInitialized(d);
+  const st = S.readState(d);
+  assert.match(st.initialized_at, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+  assert.strictEqual(st.rejected.length, 1);
+  assert.strictEqual(S.readQueue(d)[0].status, 'pending');
+});

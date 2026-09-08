@@ -24,7 +24,11 @@ switch (cmd) {
     S.markDone(a, b);
     process.exit(0);
     break;
+  case 'init-done':
+    S.markInitialized(a);
+    process.exit(0);
+    break;
   default:
-    process.stderr.write('用法: state.js {fingerprint|reject|is-rejected|done} ...\n');
+    process.stderr.write('用法: state.js {fingerprint|reject|is-rejected|done|init-done} ...\n');
     process.exit(2);
 }

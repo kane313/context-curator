@@ -64,3 +64,10 @@ test('state done 标记队列', () => {
 test('state 用法错误退出码 2', () => {
   assert.strictEqual(run(STATE, ['bogus']).rc, 2);
 });
+
+test('state init-done 写入 initialized_at', () => {
+  const d = tmpDir('cc');
+  assert.strictEqual(run(STATE, ['init-done', d]).rc, 0);
+  const st = JSON.parse(fs.readFileSync(path.join(d, 'state.json'), 'utf8'));
+  assert.match(st.initialized_at, /^\d{4}-\d{2}-\d{2}T/);
+});
