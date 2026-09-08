@@ -83,7 +83,7 @@ node profile-project.js [项目根目录] [--pretty]
   "generated_at": "2026-09-08T06:00:00Z",
   "truncated": false,                  // 文件数超过 20000 时为 true，统计不完整
   "git": {
-    "is_repo": true, "branch": "main", "remote": "git@...",
+    "is_repo": true, "branch": "main", "remote": "git@...", "head": "abc1234",
     "commit_count": 123, "first_commit": "2025-01-02", "last_commit": "2026-09-01",
     "contributors": 3
   },                                    // 不是仓库或 git 不可用时 { "is_repo": false }

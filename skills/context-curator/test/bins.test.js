@@ -8,6 +8,7 @@ const { tmpDir, readFixture } = require('./helpers');
 
 const HARVEST = path.join(__dirname, '..', 'bin', 'harvest.js');
 const STATE = path.join(__dirname, '..', 'bin', 'state.js');
+const PROFILE = path.join(__dirname, '..', 'bin', 'profile-project.js');
 
 function run(bin, args, opts = {}) {
   try {
@@ -70,4 +71,22 @@ test('state init-done 写入 initialized_at', () => {
   assert.strictEqual(run(STATE, ['init-done', d]).rc, 0);
   const st = JSON.parse(fs.readFileSync(path.join(d, 'state.json'), 'utf8'));
   assert.match(st.initialized_at, /^\d{4}-\d{2}-\d{2}T/);
+});
+
+test('profile-project 目录不存在退出 0 且输出 {}', () => {
+  const r = run(PROFILE, [path.join(tmpDir('x'), 'nope')], { env: { ...process.env, CLAUDE_CONFIG_DIR: tmpDir('cfg') } });
+  assert.strictEqual(r.rc, 0);
+  assert.strictEqual(r.out.trim(), '{}');
+});
+
+test('profile-project --pretty 输出多行 JSON 且带 root 与 manifest', () => {
+  const d = tmpDir('p');
+  fs.writeFileSync(path.join(d, 'go.mod'), 'module x\n\ngo 1.22\n');
+  const r = run(PROFILE, [d, '--pretty'], { env: { ...process.env, CLAUDE_CONFIG_DIR: tmpDir('cfg') } });
+  assert.strictEqual(r.rc, 0);
+  assert.ok(r.out.includes('\n  "root"'));
+  const j = JSON.parse(r.out);
+  assert.strictEqual(j.root, d);
+  assert.strictEqual(j.manifests[0].module, 'x');
+  assert.deepStrictEqual(j.sessions, { dir: null, count: 0 });
 });
