@@ -225,7 +225,7 @@ CLAUDE.md 已存在时整份跳过，报告里建议用户在其中加一行指�
 
 ### 7.6 memory（按需）
 
-仅当会话 agent 返回 `user` / `feedback` 类知识。写到 `context_assets.memory.dir` 下，一条一个文件，frontmatter 与本仓库 `context-curator` skill 第 5 步描述的格式一致；`MEMORY.md` 加一行索引。目标文件名已存在就跳过。
+仅当会话 agent 返回 `user` / `feedback` 类知识。写到 `context_assets.memory.dir` 下，一条一个文件，frontmatter 格式见 context-init `SKILL.md` 第 8 步；`MEMORY.md` 加一行索引。目标文件名已存在就跳过。
 
 ### 7.7 生成文件的页脚
 

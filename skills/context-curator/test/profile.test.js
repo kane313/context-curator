@@ -30,7 +30,7 @@ test('detectTooling 空项目全部为空数组', () => {
   assert.deepStrictEqual(P.detectTooling(tmpDir('t')), { tests: [], ci: [], lint: [], docker: [], env_example: [] });
 });
 
-test('contextAssets 报行数、docs 两层递归、.claude 子目录与其他 AI 规则文件', () => {
+test('contextAssets 报行数（与 wc -l 一致）、docs 两层递归、.claude 子目录与其他 AI 规则文件', () => {
   const d = tmpDir('assets');
   touch(d, 'CLAUDE.md', 'a\nb\nc\n');
   touch(d, 'README.md', 'x\n');
@@ -45,9 +45,9 @@ test('contextAssets 报行数、docs 两层递归、.claude 子目录与其他 A
   const sessionDir = tmpDir('sess');
   touch(sessionDir, 'memory/MEMORY.md', '');
   const a = P.contextAssets(d, sessionDir);
-  assert.deepStrictEqual(a['CLAUDE.md'], { exists: true, lines: 4 });
+  assert.deepStrictEqual(a['CLAUDE.md'], { exists: true, lines: 3 });
   assert.deepStrictEqual(a['AGENTS.md'], { exists: false });
-  assert.deepStrictEqual(a['README.md'], { exists: true, lines: 2 });
+  assert.deepStrictEqual(a['README.md'], { exists: true, lines: 1 });
   assert.deepStrictEqual(a.docs, ['docs/a.md', 'docs/sub/b.md', 'docs/sub/deep/c.md']);
   assert.deepStrictEqual(a.claude_dir, { rules: ['r1.md'], skills: [], commands: [], settings: true });
   assert.deepStrictEqual(a.other_ai_rules, ['.cursorrules']);

@@ -62,7 +62,7 @@ node "$CCH"/bin/profile-project.js . --pretty
 
 - `context_assets`：哪些目标文件已存在（决定跳过什么）、已有 `docs/` 清单、memory 目录
 - `sessions.dir` / `sessions.count`：有没有历史会话可挖
-- `manifests` / `suggested_commands` / `entrypoints` / `tree` / `languages`：技术栈、命令、入口、目录
+- `manifests` / `suggested_commands` / `entrypoints` / `tree` / `languages`：技术栈、命令、入口、目录。`tooling` 与 `entrypoints` 只探测仓库根，为空不代表没有——代码 agent 精读时补
 - `git`：分支与短 commit（写进页脚）
 - `truncated` 为 true 时在报告里注明「文件数超过两万，语言统计不完整」
 
@@ -75,8 +75,10 @@ node "$CCH"/bin/profile-project.js . --pretty
 | `CLAUDE.md` | `context_assets["CLAUDE.md"].exists` 为 false |
 | `docs/context/product.md` | `context_assets.docs` 里没有它，且有 PRD |
 | `docs/context/architecture.md` | `context_assets.docs` 里没有它 |
-| `docs/context/decisions.md` | `context_assets.docs` 里没有它，且 `sessions.count > 0` |
+| `docs/context/decisions.md` | `context_assets.docs` 里没有它，且 `sessions.count > 0`（还要看第 4 步粗筛结果：粗筛为空同样不生成） |
 | `docs/context/glossary.md` | `context_assets.docs` 里没有它 |
+
+`AGENTS.md` 已存在而 `CLAUDE.md` 不存在时，`CLAUDE.md` 仍然可写，但其中与 `AGENTS.md` 重复的内容一律改为一行指针「见 `AGENTS.md`」，只保留 `AGENTS.md` 没有的部分（指针表、当前状态）。
 
 全部目标都已存在时，报告「没有可新增的文件」，建议用户跑 `/curate 全量`，然后停止。**不写任何东西。**
 
@@ -151,7 +153,7 @@ node "$CCH"/bin/harvest.js "<sessions.dir>" --min-score 5
 
 组装要点：
 
-- `CLAUDE.md`：60-100 行。「本项目约定」只收有出处的；一条都没有就写「暂无有据可查的约定，跑 `/curate` 持续沉淀」。「深入阅读」表里本次没生成的行删掉，已有 `docs/` 里相关的文档加进来。
+- `CLAUDE.md`：不超过 100 行；证据不足就更短，铁律 2 优先，不为凑行数编内容。「本项目约定」只收有出处的；一条都没有就写「暂无有据可查的约定，跑 `/curate` 持续沉淀」。「深入阅读」表里本次没生成的行删掉，已有 `docs/` 里相关的文档加进来。
 - `product.md`：PRD 什么语言就什么语言，不翻译。对照表状态只用 已实现 / 部分 / 未实现 / PRD 未提 四种，加「待核实」标记。
 - `architecture.md`：按顶层目录组织模块小节。
 - `decisions.md`：按时间倒序。
@@ -216,6 +218,9 @@ node "$CCH"/bin/state.js init-done "$CC"
 
 跳过（已存在，未改）
   <文件> → <处理方式，如：已在 CLAUDE.md 指针表里引用>
+
+未生成（证据不足）
+  docs/context/decisions.md → 历史会话里没有 score ≥ 5 的线索
 
 ⚠️ 待你处理
   - <填不出的字段 / 待核实的条目 / 探测降级 / 统计截断>

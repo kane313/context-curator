@@ -25,9 +25,12 @@ function listNames(dir) {
   }
 }
 
+// 与 wc -l 一致：末尾换行不多计一行，空文件为 0。
 function lineCount(file) {
   try {
-    return fs.readFileSync(file, 'utf8').split('\n').length;
+    const text = fs.readFileSync(file, 'utf8');
+    if (!text) return 0;
+    return text.split('\n').length - (text.endsWith('\n') ? 1 : 0);
   } catch {
     return null;
   }
