@@ -18,4 +18,11 @@ function tmpDir(name) {
   return dir;
 }
 
-module.exports = { FIXTURES, readFixture, tmpDir };
+// 在 root 下按相对路径建文件（父目录自动创建），测试造 fixture 项目用
+function touch(root, rel, content = '') {
+  const p = path.join(root, ...rel.split('/'));
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(p, content);
+}
+
+module.exports = { FIXTURES, readFixture, tmpDir, touch };
