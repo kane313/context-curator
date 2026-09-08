@@ -8,6 +8,10 @@
 
 `SKILL.md` 里不要写死脚本的绝对路径。skill 可能装在插件缓存、`~/.claude/skills/`、`~/.agents/skills/` 三种位置之一，第 0 步的探测逻辑负责找到它自己。
 
+`skills/context-init/` 是第二个 skill，**只放 `SKILL.md` 与 `templates/`，不放脚本**。它需要的探测、粗筛、状态脚本全在 `skills/context-curator/` 里，靠 SKILL.md 第 0 步从自己的 base directory 往上一级找 `context-curator/`（找不到再走与 curate 相同的全局探测）。别把脚本复制一份过去，slug 推导之类的逻辑出现两份迟早漂移。
+
+`bin/profile-project.js` 与 `lib/profile.js` / `lib/walk.js` / `lib/manifests.js` 只读项目、只输出 JSON，和 hook 一样任何失败都 `exit 0`。它们没有、也不该有写 `CLAUDE.md`、`docs/` 或 memory 的能力——初始化的写入只由 SKILL 主体在最后一步用 Write 工具完成。
+
 ## 开发
 
 ```bash

@@ -1,7 +1,7 @@
 {
   "name": "context-curator",
-  "version": "1.0.0",
-  "description": "把会话里产生的知识沉淀成项目上下文资产（CLAUDE.md / memory / docs / skills）。会话结束时零 token 粗筛攒线索，主动唤起时逐条确认后才写入。",
+  "version": "1.1.0",
+  "description": "把会话里产生的知识沉淀成项目上下文资产（CLAUDE.md / memory / docs / skills）。会话结束时零 token 粗筛攒线索，主动唤起时逐条确认后才写入。另附 context-init skill：从 PRD + 源码 + 历史会话为零资产项目一次性生成薄 CLAUDE.md 与 docs/context/，只新增不覆盖。",
   "author": {
     "name": "kane313",
     "url": "https://github.com/kane313"

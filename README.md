@@ -18,7 +18,7 @@
 2. **没有证据就不提。** 每条建议必须指向具体会话文件 + 行号 + 你的原话。这是挡住 AI 凭空编造项目规则的主要闸门。
 3. **拒绝过的不再提。** 拒绝时记指纹，往后不再出现。
 
-第 1 条有硬保证而非仅靠自觉：全项目的脚本唯一被允许写入的文件只有 `queue.jsonl` 和 `state.json`，没有任何脚本有能力碰 `CLAUDE.md`、memory 或 `docs/`。
+第 1 条有硬保证而非仅靠自觉：全项目的脚本唯一被允许写入的文件只有 `queue.jsonl` 和 `state.json`，没有任何脚本有能力碰 `CLAUDE.md`、memory 或 `docs/`。初始化用的 `profile-project.js` 也一样：只读项目、只输出 JSON。
 
 ## 工作方式
 
@@ -44,6 +44,14 @@
 | **全量** | 首次接手一个有历史积累的项目 | 该项目全部会话 + 现有 memory + 代码 |
 | **当下** | 「把刚才这个记下来」 | 当前正在进行的会话 |
 
+另有一个**初始化**入口，服务「项目还没有任何上下文资产」的场景：
+
+```
+/context-curator:init docs/prd.md
+```
+
+它读三样东西——你给的 PRD、本地源码、该项目的历史会话——生成一份薄 `CLAUDE.md` 和 `docs/context/` 下的四份事实文档（产品与需求、架构、决策与踩坑、术语）。**只新增，不覆盖**：目标文件已存在就跳过；每一段都标出处（PRD 章节 / 代码路径 / 会话行号），指不到出处的不写。带 `--dry-run` 只打印不写盘。初始化完成后交给 `/curate` 持续养护。
+
 ## 安装
 
 只需要 Node 18 或更高，没有任何其他依赖。macOS / Linux / Windows 都支持。
@@ -64,7 +72,10 @@ Codex 从 `~/.agents/skills/` 加载 skill，把仓库里的 skill 目录放进�
 ```bash
 git clone https://github.com/kane313/context-curator.git ~/.local/share/context-curator
 ln -s ~/.local/share/context-curator/skills/context-curator ~/.agents/skills/context-curator
+ln -s ~/.local/share/context-curator/skills/context-init ~/.agents/skills/context-init
 ```
+
+`context-init` 自己不带脚本，靠探测找到旁边的 `context-curator` 目录复用脚本，所以两个目录要一起链。
 
 想要会话结束自动攒线索，在 `~/.codex/hooks.json` 里加上（路径换成你的实际路径）：
 
@@ -92,6 +103,8 @@ ln -s ~/.local/share/context-curator/skills/context-curator ~/.agents/skills/con
 ### 手动安装（任意 agent）
 
 `skills/context-curator/` 这个目录是自包含的——`SKILL.md` 和它调用的全部脚本都在里面，直接放进你的 agent 的 skill 目录即可。`/curate` 命令在 `commands/curate.md`。
+
+`skills/context-init/` 只有 `SKILL.md` 和模板，要和 `context-curator` 放在同一个 skill 目录下。`/context-curator:init` 命令在 `commands/init.md`。
 
 ### 验证安装
 
@@ -166,6 +179,14 @@ node --test   # 应输出「pass 40」「fail 0」
 
 会直接告诉你「队列里没有待沉淀的线索」然后停下，不会为了有产出而硬编知识。纯流程会话（只打了个斜杠命令、你全程没说话）本来就不入队，这是设计如此。
 
+### 项目还没有任何上下文资产
+
+```
+/context-curator:init docs/prd.md
+```
+
+一次性生成 `CLAUDE.md` + `docs/context/`。PRD 可以不给（跳过产品文档），历史会话可以没有（跳过决策文档），但源码必须在当前目录。已存在的文件一律跳过，报告里会列出来。
+
 ## 文件
 
 ```
@@ -174,14 +195,22 @@ node --test   # 应输出「pass 40」「fail 0」
 .codex-plugin/plugin.json         Codex 插件元数据
 hooks/hooks.json                  插件自带的 SessionEnd hook（装完即生效）
 commands/curate.md                /curate 斜杠命令
+commands/init.md                  /context-curator:init 斜杠命令
+skills/context-init/              ← 初始化 skill：只有流程与模板，脚本借用下面的工具箱
+├── SKILL.md                      初始化流程：四个信息源、只新增不覆盖、出处规则
+└── templates/                    CLAUDE.md 与四份 docs/context 文档的模板
 skills/context-curator/           ← 自包含的 skill，可整个搬进任何 agent 的 skill 目录
 ├── SKILL.md                      主体流程：三种模式、路由规则、确认协议
 ├── lib/scan.js                   提取真人输入 + 信号打分（hook 与 harvest 共用同一份）
 ├── lib/paths.js                  跨平台项目定位、slug 推导 + cwd 反查
 ├── lib/store.js                  队列、状态与拒绝指纹的读写
+├── lib/manifests.js              manifest 解析与命令推断（初始化用）
+├── lib/walk.js                   目录遍历统计与入口识别（初始化用）
+├── lib/profile.js                项目探测总编排：工具链、已有资产、git、会话
 ├── bin/scan-session.js           SessionEnd hook 入口
-├── bin/harvest.js                批量粗筛，供全量模式用
-├── bin/state.js                  队列状态与拒绝指纹 CLI
+├── bin/harvest.js                批量粗筛，供全量模式与初始化用
+├── bin/state.js                  队列状态、拒绝指纹与初始化时间戳 CLI
+├── bin/profile-project.js        项目探测 CLI，零 token、只读、只输出 JSON
 └── test/                         node:test 用例 + 三份 fixture + 回归比对记录
 ```
 
