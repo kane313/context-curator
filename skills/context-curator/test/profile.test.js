@@ -39,6 +39,8 @@ test('contextAssets 报行数（与 wc -l 一致）、docs 两层递归、.claud
   touch(d, 'docs/sub/deep/c.md');
   touch(d, 'docs/sub/deep/deeper/d.md');
   touch(d, 'docs/notes.txt');
+  touch(d, 'docs/context/product.md');
+  touch(d, 'docs/node_modules/pkg/README.md');
   touch(d, '.claude/rules/r1.md');
   touch(d, '.claude/settings.json', '{}');
   touch(d, '.cursorrules');
@@ -48,7 +50,10 @@ test('contextAssets 报行数（与 wc -l 一致）、docs 两层递归、.claud
   assert.deepStrictEqual(a['CLAUDE.md'], { exists: true, lines: 3 });
   assert.deepStrictEqual(a['AGENTS.md'], { exists: false });
   assert.deepStrictEqual(a['README.md'], { exists: true, lines: 1 });
-  assert.deepStrictEqual(a.docs, ['docs/a.md', 'docs/sub/b.md', 'docs/sub/deep/c.md']);
+  assert.deepStrictEqual(a.docs,
+    ['docs/a.md', 'docs/context/product.md', 'docs/sub/b.md', 'docs/sub/deep/c.md']);
+  assert.ok(!a.docs.some(f => f.includes('node_modules')));
+  assert.deepStrictEqual(a.docs_context, ['product.md']);
   assert.deepStrictEqual(a.claude_dir, { rules: ['r1.md'], skills: [], commands: [], settings: true });
   assert.deepStrictEqual(a.other_ai_rules, ['.cursorrules']);
   assert.deepStrictEqual(a.memory, { dir: path.join(sessionDir, 'memory'), files: ['MEMORY.md'] });
@@ -58,6 +63,7 @@ test('contextAssets 没有会话目录时 memory.dir 为 null', () => {
   const a = P.contextAssets(tmpDir('a'), null);
   assert.deepStrictEqual(a.memory, { dir: null, files: [] });
   assert.deepStrictEqual(a.docs, []);
+  assert.deepStrictEqual(a.docs_context, []);
 });
 
 test('gitInfo 非仓库返回 is_repo false', () => {
@@ -73,7 +79,8 @@ test('gitInfo 在真实仓库上返回分支、提交数、日期与短 sha', t 
     t.skip('git 不可用');
     return;
   }
-  g(['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '--allow-empty', '-m', 'init']);
+  g(['-c', 'user.email=t@t', '-c', 'user.name=t', '-c', 'commit.gpgsign=false',
+    'commit', '-q', '--allow-empty', '-m', 'init']);
   const info = P.gitInfo(d);
   assert.strictEqual(info.is_repo, true);
   assert.strictEqual(info.commit_count, 1);
@@ -81,6 +88,9 @@ test('gitInfo 在真实仓库上返回分支、提交数、日期与短 sha', t 
   assert.strictEqual(info.first_commit, info.last_commit);
   assert.match(info.head, /^[0-9a-f]{7,}$/);
   assert.ok(typeof info.branch === 'string' && info.branch.length > 0);
+  // macOS 的 tmp 目录本身是符号链接，比较前先 realpath
+  assert.ok(typeof info.toplevel === 'string' && info.toplevel.length > 0);
+  assert.strictEqual(path.resolve(info.toplevel), fs.realpathSync(d));
   assert.strictEqual(info.contributors, 1);
   assert.strictEqual(info.remote, undefined);
 });

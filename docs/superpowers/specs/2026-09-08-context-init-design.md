@@ -28,7 +28,7 @@
 
 ## 3. 铁律（初始化版）
 
-1. **不覆盖任何已有文件。** SKILL 层：目标路径存在即跳过并进报告。脚本层：本插件仍然没有任何脚本有能力写 `CLAUDE.md`、`docs/` 或 memory，新增的探测脚本只读项目、只输出 JSON。
+1. **不覆盖任何已有文件。** SKILL 层：目标路径存在即跳过并进报告。脚本层：本插件仍然没有任何脚本有能力写 `CLAUDE.md`、`docs/` 或 memory，新增的探测脚本只读项目、只输出 JSON。唯一例外：memory 目录下的 `MEMORY.md` 可以**追加**一行索引，已有行一个字不改。
 2. **无出处不写。** 生成文件里每一段、每一条都必须能指到三者之一：PRD 章节、代码路径、会话文件+行号。三者都指不到就不写。唯一例外是 `CLAUDE.md` 项目声明里实在填不出的字段，写「待定」并列进报告。
 3. **事实与规则分层。** PRD 与代码的事实进 `docs/context/`；只有用户原话（会话）或配置文件（lint、analysis_options 等）能证明的约束才进 `CLAUDE.md`。
 
@@ -83,7 +83,7 @@ node profile-project.js [项目根目录] [--pretty]
   "generated_at": "2026-09-08T06:00:00Z",
   "truncated": false,                  // 文件数超过 20000 时为 true，统计不完整
   "git": {
-    "is_repo": true, "branch": "main", "remote": "git@...", "head": "abc1234",
+    "is_repo": true, "toplevel": "/abs/path", "branch": "main", "remote": "git@...", "head": "abc1234",
     "commit_count": 123, "first_commit": "2025-01-02", "last_commit": "2026-09-01",
     "contributors": 3
   },                                    // 不是仓库或 git 不可用时 { "is_repo": false }
@@ -124,6 +124,7 @@ node profile-project.js [项目根目录] [--pretty]
     "AGENTS.md": { "exists": false },
     "README.md": { "exists": true, "lines": 80 },
     "docs": ["docs/api.md", "docs/context/architecture.md"],   // 递归深度 2，最多 50 个 md
+    "docs_context": ["architecture.md"],                       // 直接读 docs/context/，不受上面 50 个上限影响
     "claude_dir": { "rules": ["..."], "skills": ["..."], "commands": ["..."], "settings": true },
     "other_ai_rules": [".cursorrules"],
     "memory": { "dir": "/abs/.claude/projects/<slug>/memory", "files": ["MEMORY.md"] }
@@ -248,7 +249,7 @@ CLAUDE.md 已存在时整份跳过，报告里建议用户在其中加一行指�
    - PRD agent：返回结构化摘要与术语表，每条带章节。
    - 会话 agent：每 2-3 个会话一个。返回 `{类型, 内容, 证据:{文件, 行号, 原话}}`，明确告知宁缺毋滥；额外返回 `user` / `feedback` 类候选。
 7. **交叉对照**：功能 ↔ 模块；PRD 术语 ↔ 代码标识符；会话约定 ↔ 代码现状，冲突的标「已变化」或「待核实」。
-8. **过滤**：丢掉读代码就知道的细节（函数签名）、git 历史已有的、只对当次对话有意义的、已有资产里已写的。无出处的一律丢。
+8. **过滤**：丢掉读代码就知道的细节（函数签名）、git 历史已有的、只对当次对话有意义的、已有资产里已写的。原话含敏感信息的改转述。无出处的一律丢。
 9. **生成与写入**：按 §7 模板组装。`--dry-run` 只打印。目标存在跳过。写入用 Write 工具，脚本不参与。
 10. **记状态**：`state.json` 写 `initialized_at`（通过新增的 `state.js init-done <CC>` 子命令）。**不动 queue**——已挖过的会话仍可被 `/curate 结算` 再看一遍，第 6 步的比对会自然去重。
 11. **报告**：
@@ -333,7 +334,7 @@ AGENTS.md                                    + 结构约定：context-init 依�
 ## 12. 不做的事
 
 - 不写项目级 skill / commands。
-- 不改、不删、不备份任何已有文件（没有覆盖就不需要备份）。
+- 不改、不删、不备份任何已有文件（没有覆盖就不需要备份）；唯一例外是给 `MEMORY.md` 追加一行索引。
 - 不自动调用飞书等文档读取插件。
 - 不解析 `.gitignore`，不数代码行数。
 - 不做多语言 PRD 翻译；PRD 什么语言，`product.md` 就什么语言。

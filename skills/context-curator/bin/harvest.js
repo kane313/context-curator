@@ -6,6 +6,12 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+// stdout 是管道时 process.exit 会截断 64KB 之后的输出，必须等写回调再退出
+function emit(text) {
+  process.stdout.on('error', () => process.exit(0));
+  process.stdout.write(text, () => process.exit(0));
+}
+
 function main() {
   const dir = process.argv[2];
   if (!dir) return;
@@ -50,12 +56,12 @@ function main() {
     });
   }
   rows.sort((a, b) => b.score - a.score);
-  for (const row of rows) process.stdout.write(JSON.stringify(row) + '\n');
+  emit(rows.map(row => JSON.stringify(row) + '\n').join(''));
 }
 
 try {
   main();
 } catch {
   // 失败不该中断 skill 流程
+  process.exit(0);
 }
-process.exit(0);

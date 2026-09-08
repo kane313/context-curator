@@ -5,7 +5,7 @@ const { execFileSync } = require('node:child_process');
 const paths = require('./paths');
 const store = require('./store');
 const { parseManifests, suggestCommands } = require('./manifests');
-const { walk, detectEntrypoints } = require('./walk');
+const { walk, detectEntrypoints, IGNORED } = require('./walk');
 
 // 项目探测：只读项目，只输出事实。这里没有任何写文件的能力,也不该有。
 
@@ -61,11 +61,12 @@ function detectTooling(root) {
   return out;
 }
 
-// 递归收集 md 文件。depth 是还能往下走的目录层数。
+// 递归收集 md 文件。depth 是还能往下走的目录层数。IGNORED 里的目录名直接跳过。
 function mdFilesUnder(dir, rel, depth, out, max) {
   if (depth < 0 || out.length >= max) return;
   for (const name of listNames(dir)) {
     if (out.length >= max) return;
+    if (IGNORED.has(name)) continue;
     const full = path.join(dir, name);
     let st;
     try {
@@ -87,6 +88,8 @@ function contextAssets(root, sessionDir) {
   };
   const docs = [];
   mdFilesUnder(path.join(root, 'docs'), 'docs/', 2, docs, 50);
+  // 直接读 docs/context/，不经过 mdFilesUnder，也不受上面 50 个上限影响
+  const docs_context = listNames(path.join(root, 'docs', 'context')).filter(f => /\.md$/i.test(f));
   const cd = path.join(root, '.claude');
   const claude_dir = {
     rules: listNames(path.join(cd, 'rules')),
@@ -100,6 +103,7 @@ function contextAssets(root, sessionDir) {
     'AGENTS.md': fileInfo('AGENTS.md'),
     'README.md': fileInfo('README.md'),
     docs,
+    docs_context,
     claude_dir,
     other_ai_rules: OTHER_AI_RULES.filter(f => existsRel(root, f)),
     memory: { dir: memDir, files: memDir ? listNames(memDir) : [] },
@@ -128,6 +132,7 @@ function gitInfo(root) {
       // 该字段缺失即可
     }
   };
+  grab('toplevel', ['rev-parse', '--show-toplevel']);
   grab('branch', ['rev-parse', '--abbrev-ref', 'HEAD']);
   grab('remote', ['remote', 'get-url', 'origin']);
   grab('head', ['rev-parse', '--short', 'HEAD']);

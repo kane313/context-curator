@@ -11,7 +11,7 @@ description: Use when the user wants to bootstrap context assets for a local pro
 
 ## 铁律
 
-1. **不覆盖任何已有文件。** 目标路径已存在就跳过并写进报告，一个字不改。
+1. **不覆盖任何已有文件。** 目标路径已存在就跳过并写进报告，一个字不改。唯一例外：memory 目录下的 `MEMORY.md` 可以**追加**一行索引，已有行一个字不改。
 2. **无出处不写。** 每一段、每一条都要能指到三者之一：PRD 章节、代码路径、会话文件 + 行号。指不到就不写。唯一例外是 `CLAUDE.md` 项目声明里实在填不出的字段，写「待定」并列进报告。
 3. **事实与规则分层。** PRD 与代码的事实进 `docs/context/`；只有用户原话（会话）或配置文件（lint、analysis_options 等）能证明的约束才进 `CLAUDE.md`。
 
@@ -63,20 +63,22 @@ node "$CCH"/bin/profile-project.js . --pretty
 - `context_assets`：哪些目标文件已存在（决定跳过什么）、已有 `docs/` 清单、memory 目录
 - `sessions.dir` / `sessions.count`：有没有历史会话可挖
 - `manifests` / `suggested_commands` / `entrypoints` / `tree` / `languages`：技术栈、命令、入口、目录。`tooling` 与 `entrypoints` 只探测仓库根，为空不代表没有——代码 agent 精读时补
-- `git`：分支与短 commit（写进页脚）
+- `git`：分支与短 commit（写进页脚）；`git.toplevel` 与 `root` 不一致时说明当前目录不是仓库根，git 事实属于外层仓库，页脚照写但报告里注明
 - `truncated` 为 true 时在报告里注明「文件数超过两万，语言统计不完整」
 
 输出是 `{}` 或缺 `root` 时降级：主会话自己 `ls` 顶层目录、读 README，报告里标注「探测降级」。
 
 先按 `context_assets` 算出**本次能写的目标**：
 
+`context_assets.docs_context` 是直接读 `docs/context/` 目录得到的，不受 `docs` 列表 50 个上限影响，判断是否已存在只看它。
+
 | 目标 | 条件 |
 |---|---|
 | `CLAUDE.md` | `context_assets["CLAUDE.md"].exists` 为 false |
-| `docs/context/product.md` | `context_assets.docs` 里没有它，且有 PRD |
-| `docs/context/architecture.md` | `context_assets.docs` 里没有它 |
-| `docs/context/decisions.md` | `context_assets.docs` 里没有它，且 `sessions.count > 0`（还要看第 4 步粗筛结果：粗筛为空同样不生成） |
-| `docs/context/glossary.md` | `context_assets.docs` 里没有它 |
+| `docs/context/product.md` | `context_assets.docs_context` 里没有 `product.md`，且有 PRD |
+| `docs/context/architecture.md` | `context_assets.docs_context` 里没有 `architecture.md` |
+| `docs/context/decisions.md` | `context_assets.docs_context` 里没有 `decisions.md`，且 `sessions.count > 0`（还要看第 4 步粗筛结果：粗筛为空同样不生成） |
+| `docs/context/glossary.md` | `context_assets.docs_context` 里没有 `glossary.md` |
 
 `AGENTS.md` 已存在而 `CLAUDE.md` 不存在时，`CLAUDE.md` 仍然可写，但其中与 `AGENTS.md` 重复的内容一律改为一行指针「见 `AGENTS.md`」，只保留 `AGENTS.md` 没有的部分（指针表、当前状态）。
 
@@ -90,7 +92,7 @@ node "$CCH"/bin/profile-project.js . --pretty
 
 ### 第 3 步：读 PRD
 
-用 Read 读文件（pdf 用 `pages` 参数分段）。PRD 不超过 400 行时主会话自己读并摘要；更长时派一个子 agent，指令：
+用 Read 读文件（pdf 用 `pages` 参数分段）。PRD 不超过 400 行（pdf 不超过 15 页）时主会话自己读并摘要；更长时派一个子 agent，指令：
 
 > 读 `<PRD 文件>`，返回结构化摘要 JSON：`{ one_liner, goals:[{text, ref}], users:[{text, ref}], scenarios:[{text, ref}], features:[{name, desc, ref}], rules:[{text, ref}], nfr:[{text, ref}], terms:[{term, definition, ref}] }`。`ref` 写章节号或标题（pdf 写页码）。不要补充 PRD 没写的内容；找不到的字段留空数组。
 
@@ -104,6 +106,8 @@ node "$CCH"/bin/harvest.js "<sessions.dir>" --min-score 5
 
 按 score 降序取前 N 个（`--sessions N`，默认 10）。结果为空就跳过会话这一源，报告里说明「历史会话里没有高信号线索」。
 
+粗筛结果里可能含**当前这次会话**（你正在执行初始化的这一份记录）。把它剔除：会话 agent 读到的内容若是本次初始化的对话（出现 `/context-curator:init`、本 skill 的步骤名），整份跳过。
+
 ### 第 5 步：并行精读
 
 主会话**不读原始 jsonl、不通读源码**，派子 agent，一次性并行发出：
@@ -115,7 +119,7 @@ node "$CCH"/bin/harvest.js "<sessions.dir>" --min-score 5
 > 任务：
 > 1. 从入口文件出发，读该范围内的关键文件（入口、路由或注册表、基类、配置），概括：模块职责、分层与依赖方向、数据流、外部依赖与三方服务。每条结论必须带代码路径。
 > 2. 对照这份 PRD 功能清单：`<features 或「无」>`，逐项判断 已实现 / 部分 / 未实现，给代码位置；判不出写「待核实」。另列代码里有但清单没提的功能。
-> 3. 观察到的约定：只报在 3 处以上一致出现的模式，或有配置文件（lint、analysis_options）支撑的，附路径。
+> 3. 观察到的约定：只报在 3 处以上一致出现的模式，或有配置文件（lint、analysis_options）支撑的，附路径。（这类『从代码模式观察到的约定』只能进 `architecture.md`，不进 `CLAUDE.md`——`CLAUDE.md` 的约定只收会话原话或配置文件能证明的。）
 > 4. 领域术语：类名、表名、枚举里出现的业务名词，附路径。
 > 返回 JSON：`{ modules:[{name, path, responsibility, evidence}], layering:[{text, evidence}], data_flow:[{text, evidence}], external_deps:[{name, evidence}], prd_status:[{feature, status, path, note}], extra_features:[{name, path}], conventions:[{rule, evidence}], terms:[{term, identifier, path}] }`。
 > 宁缺毋滥：证据指不出来的不要写。
@@ -145,6 +149,7 @@ node "$CCH"/bin/harvest.js "<sessions.dir>" --min-score 5
 - git 历史里已有的记录
 - 只对当次对话有意义的临时上下文
 - 已有资产里已经写了的内容
+- 原话里含密钥、令牌、手机号邮箱等个人信息、仓库外的绝对路径的——不逐字引用，改为转述并在证据里标「（原话含敏感内容，已转述）」
 - 没有出处的任何一条
 
 ### 第 8 步：生成与写入
@@ -158,7 +163,7 @@ node "$CCH"/bin/harvest.js "<sessions.dir>" --min-score 5
 - `architecture.md`：按顶层目录组织模块小节。
 - `decisions.md`：按时间倒序。
 - `glossary.md`：PRD 与代码都有术语时出对照表；只有其一时出单列表；两边都没有可用术语时不生成。
-- memory：仅当会话 agent 返回了 `user` / `feedback` 类。写到 `context_assets.memory.dir`，一条一个文件，frontmatter 格式：
+- memory：仅当会话 agent 返回了 `user` / `feedback` 类。写到 `context_assets.memory.dir`，memory 目录里已有文件时沿用它们的 frontmatter 形态与文件名风格；没有时用下面的格式。一条一个文件，frontmatter 格式：
 
   ```markdown
   ---
@@ -185,6 +190,7 @@ node "$CCH"/bin/harvest.js "<sessions.dir>" --min-score 5
 - `--dry-run`：把每个文件的完整内容打印出来，文件名做标题，不写盘。
 - 否则用 Write 工具逐个写。**写之前再查一次目标是否存在**，存在就跳过。`docs/context/` 目录不存在由 Write 自动创建。
 - 脚本不参与写入。
+- 全部会话 agent 都返回空时，不生成 `decisions.md`，进报告的「未生成（证据不足）」。
 
 ### 第 9 步：记状态
 
@@ -215,6 +221,7 @@ node "$CCH"/bin/state.js init-done "$CC"
   docs/context/decisions.md      <N> 条
   docs/context/glossary.md       <N> 个术语
   memory/                        <N> 条
+  MEMORY.md                      追加 <N> 行索引
 
 跳过（已存在，未改）
   <文件> → <处理方式，如：已在 CLAUDE.md 指针表里引用>
@@ -224,6 +231,7 @@ node "$CCH"/bin/state.js init-done "$CC"
 
 ⚠️ 待你处理
   - <填不出的字段 / 待核实的条目 / 探测降级 / 统计截断>
+  - decisions.md 引用了会话原话，提交前请通读一遍确认没有敏感信息
 
 下一步：攒几个会话后跑 /curate 结算 持续养护。
 ```

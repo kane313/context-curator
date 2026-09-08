@@ -110,7 +110,7 @@ ln -s ~/.local/share/context-curator/skills/context-init ~/.agents/skills/contex
 
 ```bash
 cd <skill 目录>
-node --test   # 应输出「pass 70」「fail 0」
+node --test   # 应输出「pass 72」「fail 0」
 ```
 
 ## 跨平台
@@ -260,7 +260,7 @@ cd ~/.claude/skills/context-curator
 node --test
 ```
 
-70 个用例，纯 `node:test` 实现，零 npm 依赖。改动 `lib/scan.js` 的信号逻辑后请跑一遍——测试里有变异测试验证过的排除类断言，能抓住排除逻辑被误删。
+72 个用例，纯 `node:test` 实现，零 npm 依赖。改动 `lib/scan.js` 的信号逻辑后请跑一遍——测试里有变异测试验证过的排除类断言，能抓住排除逻辑被误删。
 
 ## License
 

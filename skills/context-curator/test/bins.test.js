@@ -45,6 +45,19 @@ test('harvest 目录不存在也退出 0', () => {
   assert.strictEqual(run(HARVEST, [path.join(tmpDir('x'), 'nope')]).rc, 0);
 });
 
+// stdout 是管道时 process.exit 会丢掉 64KB 之后的内容，这两个用例卡住这条回归线
+test('harvest 输出超过 64KB 不被截断', () => {
+  const d = tmpDir('big-harvest');
+  const text = readFixture('new-format.jsonl');
+  for (let i = 0; i < 300; i++) fs.writeFileSync(path.join(d, `s-${String(i).padStart(4, '0')}.jsonl`), text);
+  const r = run(HARVEST, [d]);
+  assert.strictEqual(r.rc, 0);
+  assert.ok(r.out.length > 65536, `输出只有 ${r.out.length} 字节`);
+  const lines = r.out.split('\n').filter(Boolean);
+  assert.strictEqual(lines.length, 300);
+  for (const line of lines) JSON.parse(line);
+});
+
 test('state CLI 全流程', () => {
   const d = tmpDir('cc');
   const fp = run(STATE, ['fingerprint', 'CLAUDE.md', '纠错', 'x']).out.trim();
@@ -89,4 +102,17 @@ test('profile-project --pretty 输出多行 JSON 且带 root 与 manifest', () =
   assert.strictEqual(j.root, d);
   assert.strictEqual(j.manifests[0].module, 'x');
   assert.deepStrictEqual(j.sessions, { dir: null, count: 0 });
+});
+
+test('profile-project 输出超过 64KB 不被截断', () => {
+  const d = tmpDir('big-profile');
+  for (let i = 0; i < 130; i++) {
+    for (let j = 0; j < 30; j++) {
+      fs.mkdirSync(path.join(d, `top-${i}`, `child-${j}-${'x'.repeat(12)}`), { recursive: true });
+    }
+  }
+  const r = run(PROFILE, [d, '--pretty'], { env: { ...process.env, CLAUDE_CONFIG_DIR: tmpDir('cfg') } });
+  assert.strictEqual(r.rc, 0);
+  assert.ok(r.out.length > 65536, `输出只有 ${r.out.length} 字节`);
+  assert.strictEqual(JSON.parse(r.out).tree.length, 130);
 });

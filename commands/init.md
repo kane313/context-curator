@@ -1,6 +1,6 @@
 ---
 description: 从 PRD + 源码 + 历史会话初始化项目上下文资产（薄 CLAUDE.md + docs/context/），只新增不覆盖
-argument-hint: [PRD路径] [--dry-run] [--sessions N]
+argument-hint: "[PRD路径] [--dry-run] [--sessions N]"
 ---
 
 用 context-init skill 初始化当前项目的上下文资产。
