@@ -50,7 +50,7 @@
 /context-curator:init docs/prd.md
 ```
 
-它读三样东西——你给的 PRD、本地源码、该项目的历史会话——生成一份薄 `CLAUDE.md` 和 `docs/context/` 下的四份事实文档（产品与需求、架构、决策与踩坑、术语）。**只新增，不覆盖**：目标文件已存在就跳过；每一段都标出处（PRD 章节 / 代码路径 / 会话行号），指不到出处的不写。带 `--dry-run` 只打印不写盘。初始化完成后交给 `/curate` 持续养护。
+它读三样东西——你给的 PRD、本地源码、该项目的历史会话——生成一份薄 `CLAUDE.md` 和 `docs/context/` 下的四份事实文档（产品与需求、架构、决策与踩坑、术语）。**只新增，不覆盖**：目标文件已存在就跳过；每一段都标出处（PRD 章节 / 代码路径 / 会话行号），指不到出处的不写。带 `--dry-run` 只打印不写盘。初始化完成后交给 `/curate` 持续养护。Codex 下主体产 `AGENTS.md`（≤80 行）加一份三四行的 `CLAUDE.md` 指针，`docs/context/` 照旧；平台判错了可以让它带 `--platform=claude` 重跑。
 
 ## 安装
 
@@ -77,28 +77,11 @@ ln -s ~/.local/share/context-curator/skills/context-init ~/.agents/skills/contex
 
 `context-init` 自己不带脚本，靠探测找到旁边的 `context-curator` 目录复用脚本，所以两个目录要一起链。
 
-想要会话结束自动攒线索，在 `~/.codex/hooks.json` 里加上（路径换成你的实际路径）：
+想要会话结束自动攒线索，Codex 的 hook 配在 `~/.codex/config.toml` 的 `[hooks]` 段（**不是** `hooks.json`；Codex 另有一道 hook 信任机制，首次启用要确认）。要挂的是 `SessionEnd` 事件，执行 `node <仓库路径>/skills/context-curator/bin/scan-session.js`，超时 5 秒。
 
-```json
-{
-  "hooks": {
-    "SessionEnd": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node",
-            "args": ["/绝对路径/context-curator/skills/context-curator/bin/scan-session.js"],
-            "timeout": 5
-          }
-        ]
-      }
-    ]
-  }
-}
-```
+具体 TOML 写法请查 Codex 官方文档——**本项目没有在真机上验证过那段 TOML 的确切字段，所以不在这里给可能是错的示例**。
 
-不配 hook 也能用，只是要靠 `/curate 全量` 手动扫。
+不配 hook 也能用，只是要靠 `/curate 全量` 手动扫——但先读下面「两条诚实说明」的第 2 条，Codex 下这条路目前走不通。
 
 ### 手动安装（任意 agent）
 
@@ -110,7 +93,7 @@ ln -s ~/.local/share/context-curator/skills/context-init ~/.agents/skills/contex
 
 ```bash
 cd <skill 目录>
-node --test   # 应输出「pass 72」「fail 0」
+node --test   # 应输出「pass 87」「fail 0」
 ```
 
 ## 跨平台
@@ -119,12 +102,16 @@ node --test   # 应输出「pass 72」「fail 0」
 
 - Windows 用户**不需要** Git Bash，也**不需要**装 jq——hook 直接用 `node` 执行 `.js`，跟 macOS / Linux 是同一份代码。
 - hook 统一用 exec form（`command` 传可执行文件、`args` 传数组），不依赖 shebang 或可执行位。
-- Claude Code 与 Codex 的 `SessionEnd` hook payload 字段一致（`session_id` / `transcript_path` / `cwd`），所以两边共用同一个 `scan-session.js`。
+- Claude Code 与 Codex 的 `SessionEnd` hook payload 字段一致（`session_id` / `transcript_path` / `cwd`），所以两边共用同一个 `scan-session.js`。Codex 的 `transcript_path` 可以是 `null`，`scan-session.js` 已经按 falsy 处理并安静退出。
 
 **两条诚实说明**：
 
 1. **Windows 尚未实机验证。** 目前只做了代码层面的跨平台处理，没有在真实 Windows 机器上跑过。遇到问题欢迎提 issue。
-2. **Codex 的会话记录格式尚未验证。** 信号提取是照着 Claude Code 的 transcript 格式写的。如果 Codex 的格式不同，hook 会因为解析不出真人输入而判 0 分、安静跳过——不会报错，但也不会有线索入队。这种情况下 `/curate 当下`（只分析当前对话）仍然可用。有 Codex 会话样本的话欢迎提 issue，我可以补上格式适配。
+2. **Codex 下的会话挖掘不可用。** Codex 0.154 把会话记录存进 SQLite（`~/.codex/thread_history_1.sqlite`），不再是 Claude Code 那样的 jsonl；legacy 的 rollout jsonl 要靠 `codex migrate-rollouts` 迁进去。本插件的信号提取是照着 Claude Code 的 transcript 格式写的，所以 Codex 下这三条路目前走不通：hook 攒线索、`/curate 结算`、`/curate 全量`。
+
+   Codex 下可用的是：`/curate 当下`（只分析当前对话），以及 `/context-curator:init` 的 PRD + 源码两个信息源——init 在 Codex 下会明确跳过会话这一源并在报告里说明，主体产物是 `AGENTS.md`（≤80 行）加一份三四行的 `CLAUDE.md` 指针。
+
+   有 Codex 会话样本、或愿意帮忙验证 SQLite 表结构的话，欢迎提 issue。
 
 ## 怎么用
 
@@ -245,7 +232,7 @@ skills/context-curator/           ← 自包含的 skill，可整个搬进任何
 
 | 现象 | 检查 |
 |---|---|
-| 队列一直是空的 | 用插件装的话 hook 由 `hooks/hooks.json` 提供，跑 `/plugin` 看插件是否已启用；手动配的话确认 `~/.claude/settings.json`（或 Codex 的 `~/.codex/hooks.json`）里有 `SessionEnd`。再手动喂一条 payload 给 `bin/scan-session.js` 看结果 |
+| 队列一直是空的 | 用插件装的话 hook 由 `hooks/hooks.json` 提供，跑 `/plugin` 看插件是否已启用；手动配的话确认 `~/.claude/settings.json`（或 Codex 的 `~/.codex/config.toml` 的 `[hooks]` 段）里有 `SessionEnd`。Codex 下还要先读「两条诚实说明」第 2 条——那边的会话挖掘目前走不通，队列空是预期行为。再手动喂一条 payload 给 `bin/scan-session.js` 看结果 |
 | 装了插件又手配过 hook | 两个 hook 会都触发，但 `scan-session.js` 对同一 session 是幂等的，不会重复入队。想干净就删掉手配的那份 |
 | 会话结束卡顿 | 实测 1.7MB 会话仅 0.03s、2.0MB 会话 0.1s。若卡顿先确认 `timeout: 5` 配上了 |
 | 找不到队列目录 | 多半是项目路径含下划线，确认用的是「非字母数字全换 `-`」的 slug 规则 |

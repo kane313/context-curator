@@ -6,9 +6,13 @@
 
 `skills/context-curator/` 必须保持**自包含**——`SKILL.md` 和它调用的所有脚本都在这个目录里。别把 `lib/` 或 `bin/` 挪到仓库根，否则这个目录就不能单独拷进 `~/.agents/skills/` 给 Codex 用了。
 
-`SKILL.md` 里不要写死脚本的绝对路径。skill 可能装在插件缓存、`~/.claude/skills/`、`~/.agents/skills/` 三种位置之一，第 0 步的探测逻辑负责找到它自己。
+`SKILL.md` 里不要写死脚本的绝对路径。skill 可能装在 Claude 插件缓存、`~/.claude/skills/`、`~/.agents/skills/`、`<CODEX_HOME>/skills/`、Codex 插件缓存几种位置之一，第 0 步的探测逻辑负责找到它自己。
 
 `skills/context-init/` 是第二个 skill，**只放 `SKILL.md` 与 `templates/`，不放脚本**。它需要的探测、粗筛、状态脚本全在 `skills/context-curator/` 里，靠 SKILL.md 第 0 步从自己的 base directory 往上一级找 `context-curator/`（找不到再走与 curate 相同的全局探测）。别把脚本复制一份过去，slug 推导之类的逻辑出现两份迟早漂移。
+
+平台判定只有一处实现：`lib/profile.js` 的 `detectPlatform()`，由 `bin/profile-project.js` 以 `--skill-base=` / `--platform=` 暴露，输出到 profile 的 `platform` 字段。两份 SKILL.md 只消费这个字段，**不要**在 markdown 里自己写 shell 判平台——理由和上面那条「slug 推导出现两份迟早漂移」是一样的。
+
+两份 SKILL.md 第 0 步的脚本探测片段是同构的重复逻辑（一份找 `lib/scan.js`、一份找 `lib/profile.js`），**改一处必须同步改另一处**，漏一处就是只在某个平台出现的 bug。另外别再往里加 `CODEX_PLUGIN_ROOT`：这个环境变量在 Codex 里不存在（0.154 二进制里只有裸的 `PLUGIN_ROOT`，那是 MCP stdio 配置的路径占位符），Codex 侧认的是 `CODEX_HOME`（默认 `~/.codex`）。
 
 `bin/profile-project.js` 与 `lib/profile.js` / `lib/walk.js` / `lib/manifests.js` 只读项目、只输出 JSON，和 hook 一样任何失败都 `exit 0`。它们没有、也不该有写 `CLAUDE.md`、`docs/` 或 memory 的能力——初始化的写入只由 SKILL 主体在最后一步用 Write 工具完成。
 
