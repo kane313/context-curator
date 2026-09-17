@@ -67,15 +67,30 @@
 
 ### Codex
 
-Codex 从 `~/.agents/skills/` 加载 skill，把仓库里的 skill 目录放进去即可：
+Codex 原生就能装（1.2.0 起）——它直接读本仓库的 `.claude-plugin/marketplace.json`，不需要另造一份 Codex 格式的清单：
 
 ```bash
-git clone https://github.com/kane313/context-curator.git ~/.local/share/context-curator
-ln -s ~/.local/share/context-curator/skills/context-curator ~/.agents/skills/context-curator
-ln -s ~/.local/share/context-curator/skills/context-init ~/.agents/skills/context-init
+codex plugin marketplace add kane313/context-curator --ref main
+codex plugin add context-curator@context-curator
 ```
 
-`context-init` 自己不带脚本，靠探测找到旁边的 `context-curator` 目录复用脚本，所以两个目录要一起链。
+装完 `codex plugin list` 会显示 `installed, enabled`，两个 skill 与它们依赖的脚本都在。
+
+**或者用安装脚本**，它多做几件原生命令不管的事（前置检查、装完验证、同名 skill 冲突检测、hook 指引）：
+
+```bash
+git clone https://github.com/kane313/context-curator.git
+cd context-curator
+node scripts/install-codex.js            # 插件模式，等价于上面两条命令再加检查
+node scripts/install-codex.js --link     # 开发者模式：软链到 ~/.agents/skills/，改代码立即生效
+node scripts/install-codex.js --dry-run  # 只打印将做什么
+```
+
+两种模式的区别：插件模式装的是**代码快照**（`~/.codex/plugins/cache/.../<版本>/`），改了仓库代码要重装才生效，但有版本管理；`--link` 模式建的是链接，改代码立即生效，适合开发。脚本是纯 Node 写的，Windows 上目录链接用 junction，不需要管理员权限。
+
+**别同时用两种模式**——Codex 会看到两份同名 skill。脚本会检测到并警告。
+
+`context-init` 自己不带脚本，靠探测找到旁边的 `context-curator` 目录复用脚本，所以手工链的话两个目录要一起链（脚本会自动处理）。
 
 想要会话结束自动攒线索，Codex 的 hook 配在 `~/.codex/config.toml` 的 `[hooks]` 段（**不是** `hooks.json`；Codex 另有一道 hook 信任机制，首次启用要确认）。要挂的是 `SessionEnd` 事件，执行 `node <仓库路径>/skills/context-curator/bin/scan-session.js`，超时 5 秒。
 

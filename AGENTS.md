@@ -16,6 +16,8 @@
 
 `bin/profile-project.js` 与 `lib/profile.js` / `lib/walk.js` / `lib/manifests.js` 只读项目、只输出 JSON，和 hook 一样任何失败都 `exit 0`。它们没有、也不该有写 `CLAUDE.md`、`docs/` 或 memory 的能力——初始化的写入只由 SKILL 主体在最后一步用 Write 工具完成。
 
+`scripts/install-codex.js` 是给用户跑的 Codex 安装脚本，**它的失败纪律和 `bin/` 下的脚本相反**：`bin/` 里那些是 hook 与 skill 的被调脚本，任何失败都必须 `exit 0` 以免拖累会话；安装脚本装失败必须让用户知道，所以一律非 0 退出。别为了"统一风格"把它改成 `exit 0`。它的纯逻辑在 `scripts/install-codex.test.js` 里有测试，跑法是 `node --test scripts/install-codex.test.js`（不在 skill 的 `node --test` 范围内——安装脚本不属于自包含 skill）。
+
 ## 开发
 
 ```bash
