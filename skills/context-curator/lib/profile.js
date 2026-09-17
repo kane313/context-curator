@@ -238,6 +238,7 @@ function profileProject(root, opts = {}) {
   return {
     root: abs,
     generated_at: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+    platform: detectPlatform(opts.skillBase, { override: opts.platform }),
     truncated,
     git: gitInfo(abs),
     manifests,

@@ -240,3 +240,44 @@ test('under 只在真正的子路径上为真', () => {
   assert.strictEqual(P.under(path.join(home, 'ab'), path.join(home, 'a')), false);
   assert.strictEqual(P.under(path.join(home, 'a'), path.join(home, 'a', 'b')), false);
 });
+
+test('profileProject 输出 platform 字段并透传 skillBase 与覆盖值', () => {
+  const projects = tmpDir('projects');
+  const root = tmpDir('proj');
+  touch(root, 'package.json', '{"name":"demo"}\n');
+  const auto = P.profileProject(root, { projectsRoot: projects });
+  assert.strictEqual(typeof auto.platform.id, 'string');
+  assert.ok(['codex', 'claude'].includes(auto.platform.id));
+  assert.ok(auto.platform.evidence.length > 0);
+  const forced = P.profileProject(root, { projectsRoot: projects, platform: 'codex' });
+  assert.strictEqual(forced.platform.id, 'codex');
+  assert.match(forced.platform.evidence, /显式指定/);
+});
+
+// 下面两个用例跑真实 CLI。必须用 CLAUDE_CONFIG_DIR 把会话目录指到一个临时空目录：
+// CLI 没有注入 projectsRoot 的途径，否则 findProjectDir 会遍历真实的
+// ~/.claude/projects 并逐行读每个 jsonl 找 cwd，慢且让单测依赖真实环境。
+function cliEnv() {
+  return { ...process.env, CLAUDE_CONFIG_DIR: tmpDir('cfg') };
+}
+
+test('profile-project.js 认 --platform= 与 --skill-base=，且路径值不被当成项目根目录', () => {
+  const root = tmpDir('cliproj');
+  touch(root, 'package.json', '{"name":"cli"}\n');
+  const bin = path.join(__dirname, '..', 'bin', 'profile-project.js');
+  const out = execFileSync('node', [bin, root, `--skill-base=${path.join(root, '.agents', 'skills', 'x')}`, '--platform=codex'], { encoding: 'utf8', env: cliEnv() });
+  const p = JSON.parse(out);
+  // --skill-base= 的值绝不能被 args.find(a => !a.startsWith('--')) 当成项目根目录
+  assert.strictEqual(p.root, root);
+  assert.strictEqual(p.platform.id, 'codex');
+});
+
+test('profile-project.js 非法 --platform= 值回落自动判定而不报错', () => {
+  const root = tmpDir('cliproj2');
+  touch(root, 'package.json', '{"name":"cli2"}\n');
+  const bin = path.join(__dirname, '..', 'bin', 'profile-project.js');
+  const out = execFileSync('node', [bin, root, '--platform=gemini'], { encoding: 'utf8', env: cliEnv() });
+  const p = JSON.parse(out);
+  assert.ok(['codex', 'claude'].includes(p.platform.id));
+  assert.doesNotMatch(p.platform.evidence, /显式指定/);
+});
