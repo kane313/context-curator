@@ -37,16 +37,18 @@ description: Use when the user wants to bootstrap context assets for a local pro
 CCH=$(node -e '
 const fs=require("fs"),os=require("os"),path=require("path");
 const base=process.argv[1]||"";const h=os.homedir(),hit=[];
+const cx=process.env.CODEX_HOME||path.join(h,".codex");
 const push=p=>{try{if(p&&fs.existsSync(path.join(p,"lib","profile.js")))hit.push(path.resolve(p))}catch{}};
 push(base&&path.join(base,"..","context-curator"));
 push(process.env.CLAUDE_PLUGIN_ROOT&&path.join(process.env.CLAUDE_PLUGIN_ROOT,"skills","context-curator"));
-push(process.env.CODEX_PLUGIN_ROOT&&path.join(process.env.CODEX_PLUGIN_ROOT,"skills","context-curator"));
 push(path.join(h,".claude","skills","context-curator"));
+push(path.join(cx,"skills","context-curator"));
 push(path.join(h,".agents","skills","context-curator"));
 const walk=(d,depth)=>{if(depth>4)return;let es=[];try{es=fs.readdirSync(d,{withFileTypes:true})}catch{return}
   for(const e of es){if(!e.isDirectory())continue;const q=path.join(d,e.name);
     push(path.join(q,"skills","context-curator"));walk(q,depth+1)}};
 walk(path.join(h,".claude","plugins","cache"),0);
+walk(path.join(cx,"plugins","cache"),0);
 console.log(hit[0]||"")' "<本 skill 的 base directory>")
 ```
 

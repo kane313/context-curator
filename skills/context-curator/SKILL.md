@@ -27,7 +27,7 @@ description: Use when the user wants to consolidate knowledge from past sessions
 
 ### 第 0 步：确定本 skill 的目录
 
-后面的命令都要调用本 skill 自带的脚本，先确定它们在哪。本 skill 可能装在三种位置之一（Claude 插件缓存 / `~/.claude/skills/` / Codex 的 `~/.agents/skills/`），所以不要写死路径。
+后面的命令都要调用本 skill 自带的脚本，先确定它们在哪。本 skill 可能装在几种位置之一（Claude 插件缓存 / `~/.claude/skills/` / Codex 的 `~/.agents/skills/` / `<CODEX_HOME>/skills/` / Codex 插件缓存），所以不要写死路径。
 
 加载本 skill 时，运行环境通常会告诉你它的 base directory（形如 `Base directory for this skill: /some/path/skills/context-curator`）——那就是 `$CCH`。若环境没告知，用这条命令探测：
 
@@ -35,15 +35,17 @@ description: Use when the user wants to consolidate knowledge from past sessions
 CCH=$(node -e '
 const fs=require("fs"),os=require("os"),path=require("path");
 const h=os.homedir(),hit=[];
+const cx=process.env.CODEX_HOME||path.join(h,".codex");
 const push=p=>{try{if(p&&fs.existsSync(path.join(p,"lib","scan.js")))hit.push(p)}catch{}};
 push(process.env.CLAUDE_PLUGIN_ROOT&&path.join(process.env.CLAUDE_PLUGIN_ROOT,"skills","context-curator"));
-push(process.env.CODEX_PLUGIN_ROOT&&path.join(process.env.CODEX_PLUGIN_ROOT,"skills","context-curator"));
 push(path.join(h,".claude","skills","context-curator"));
+push(path.join(cx,"skills","context-curator"));
 push(path.join(h,".agents","skills","context-curator"));
 const walk=(d,depth)=>{if(depth>4)return;let es=[];try{es=fs.readdirSync(d,{withFileTypes:true})}catch{return}
   for(const e of es){if(!e.isDirectory())continue;const q=path.join(d,e.name);
     push(path.join(q,"skills","context-curator"));walk(q,depth+1)}};
 walk(path.join(h,".claude","plugins","cache"),0);
+walk(path.join(cx,"plugins","cache"),0);
 console.log(hit[0]||"")')
 ```
 
