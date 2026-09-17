@@ -9,7 +9,7 @@
   "plugins": [
     {
       "name": "context-curator",
-      "description": "把会话里产生的知识沉淀成项目上下文资产（CLAUDE.md / memory / docs / skills）。会话结束时零 token 后台粗筛攒线索，你主动唤起时逐条确认后才写入。另附 /context-curator:init 从 PRD + 源码 + 历史会话初始化零资产项目。",
+      "description": "把会话里产生的知识沉淀成项目上下文资产（CLAUDE.md / memory / docs / skills）。会话结束时零 token 后台粗筛攒线索，你主动唤起时逐条确认后才写入。另附 /context-curator:init 从 PRD + 源码 + 历史会话初始化零资产项目，Codex 下产 AGENTS.md。",
       "category": "productivity",
       "source": "./"
     }
