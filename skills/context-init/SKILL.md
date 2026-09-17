@@ -57,11 +57,12 @@ console.log(hit[0]||"")' "<本 skill 的 base directory>")
 ### 第 1 步：探测项目
 
 ```bash
-node "$CCH"/bin/profile-project.js . --pretty
+node "$CCH"/bin/profile-project.js . --pretty --skill-base="<本 skill 的 base directory>"
 ```
 
 输出是一份 JSON，全是确定性事实，拿来就用，不要自己再猜一遍。重点看：
 
+- `platform`：`{ id, evidence }`。`id` 是 `codex` 或 `claude`，决定主体产物写 `AGENTS.md` 还是 `CLAUDE.md`。判错了可以加 `--platform=codex` 或 `--platform=claude` 重跑，`evidence` 要照抄进第 10 步报告，让用户能发现判错。
 - `context_assets`：哪些目标文件已存在（决定跳过什么）、已有 `docs/` 清单、memory 目录
 - `sessions.dir` / `sessions.count`：有没有历史会话可挖
 - `manifests` / `suggested_commands` / `entrypoints` / `tree` / `languages`：技术栈、命令、入口、目录。`tooling` 与 `entrypoints` 只探测仓库根，为空不代表没有——代码 agent 精读时补
@@ -74,6 +75,10 @@ node "$CCH"/bin/profile-project.js . --pretty
 
 `context_assets.docs_context` 是直接读 `docs/context/` 目录得到的，不受 `docs` 列表 50 个上限影响，判断是否已存在只看它。
 
+先看 `platform.id` 选表。
+
+`platform.id === 'claude'`（表 A）：
+
 | 目标 | 条件 |
 |---|---|
 | `CLAUDE.md` | `context_assets["CLAUDE.md"].exists` 为 false |
@@ -82,7 +87,24 @@ node "$CCH"/bin/profile-project.js . --pretty
 | `docs/context/decisions.md` | `context_assets.docs_context` 里没有 `decisions.md`，且 `sessions.count > 0`（还要看第 4 步粗筛结果：粗筛为空同样不生成） |
 | `docs/context/glossary.md` | `context_assets.docs_context` 里没有 `glossary.md` |
 
-`AGENTS.md` 已存在而 `CLAUDE.md` 不存在时，`CLAUDE.md` 仍然可写，但其中与 `AGENTS.md` 重复的内容一律改为一行指针「见 `AGENTS.md`」，只保留 `AGENTS.md` 没有的部分（指针表、当前状态）。
+表 A 适用：`AGENTS.md` 已存在而 `CLAUDE.md` 不存在时，`CLAUDE.md` 仍然可写，但其中与 `AGENTS.md` 重复的内容一律改为一行指针「见 `AGENTS.md`」，只保留 `AGENTS.md` 没有的部分（指针表、当前状态）。
+
+`platform.id === 'codex'`（表 B）：
+
+| 目标 | 条件 |
+|---|---|
+| `AGENTS.md`（主体，≤80 行） | `context_assets["AGENTS.md"].exists` 为 false |
+| `CLAUDE.md`（3-4 行指针） | `context_assets["CLAUDE.md"].exists` 为 false |
+| `docs/context/product.md` | 同表 A |
+| `docs/context/architecture.md` | 同表 A |
+| `docs/context/decisions.md` | **Codex 下必然不生成**，见第 4 步 |
+| `docs/context/glossary.md` | 同表 A |
+
+`AGENTS.md` 主体的行数上限是 80 而不是 `CLAUDE.md` 的 100：Codex 下没有会话源，「本项目约定」一节缺了会话原话这个来源（配置文件那一路仍在），「当前状态」的已知问题也没有会话出处可引，内容天然更少。
+
+`AGENTS.md` 已存在：跳过主体，一个字不改（铁律 1），只补 `CLAUDE.md` 指针，并写进报告的「跳过」段。
+
+Codex 下 `sessions.dir` 为 `null`、`sessions.count` 为 `0` 是**设计如此**，不是探测失败——`findProjectDir` 查的是 `~/.claude/projects/`。本步上面那个「探测降级」分支只针对 profile 输出 `{}` 或缺 `root`，与 `sessions.count` 无关，别把两件事混起来。
 
 全部目标都已存在时，报告「没有可新增的文件」，建议用户跑 `/curate 全量`，然后停止。**不写任何东西。**
 
@@ -100,7 +122,9 @@ node "$CCH"/bin/profile-project.js . --pretty
 
 ### 第 4 步：粗筛会话
 
-`sessions.count > 0` 时：
+`platform.id === 'codex'` 时**整步跳过**：Codex 的会话记录存在 SQLite thread history（`<CODEX_HOME>/thread_history_1.sqlite`），本插件尚未支持读取。这不是失败，直接进第 5 步，并按第 10 步的写法在报告里说明。
+
+`platform.id === 'claude'` 且 `sessions.count > 0` 时：
 
 ```bash
 node "$CCH"/bin/harvest.js "<sessions.dir>" --min-score 5
@@ -128,7 +152,7 @@ node "$CCH"/bin/harvest.js "<sessions.dir>" --min-score 5
 
 **PRD agent。** 仅当第 3 步判定需要（PRD 超过 400 行）。
 
-**会话 agent。** 每 2-3 个会话一个。指令要点：
+**会话 agent。** 仅 `platform.id === 'claude'` 时派。Codex 下没有会话源（第 4 步已跳过），不派会话 agent；代码 agent 与 PRD agent 照常。每 2-3 个会话一个，指令要点：
 
 > 精读这些会话文件：`<路径 + hits 行号列表>`。它们是 Claude Code 的 jsonl 记录，`hits[].line` 是正则粗筛命中的行号，只是入口，不是结论。
 > 读命中行前后 20-40 行的上下文，判断用户是否表达了：决策、踩坑、纠正 AI、约定或禁令、对 AI 工作方式的偏好。
@@ -158,9 +182,11 @@ node "$CCH"/bin/harvest.js "<sessions.dir>" --min-score 5
 
 按 `templates/` 下的模板组装，模板路径是本 skill base directory 下的 `templates/*.template.md`。模板里 `{…}` 是占位、括号里的斜体说明是给你的指令，落地时全部替换或删掉，**不要把占位符和说明留在产物里**。
 
+`templates/claude.template.md` 平台中立，`platform.id === 'codex'` 时用同一份模板组装 `AGENTS.md`，只是产物文件名与行数上限不同（≤80 行），不新增模板文件。
+
 组装要点：
 
-- `CLAUDE.md`：不超过 100 行；证据不足就更短，铁律 2 优先，不为凑行数编内容。「本项目约定」只收有出处的；一条都没有就写「暂无有据可查的约定，跑 `/curate` 持续沉淀」。「深入阅读」表里本次没生成的行删掉，已有 `docs/` 里相关的文档加进来。
+- `CLAUDE.md`（表 A）/ `AGENTS.md`（表 B）主体：不超过 100 行 / 80 行；证据不足就更短，铁律 2 优先，不为凑行数编内容。「本项目约定」只收有出处的；一条都没有就写「暂无有据可查的约定，跑 `/curate` 持续沉淀」。「深入阅读」表里本次没生成的行删掉，已有 `docs/` 里相关的文档加进来。
 - `product.md`：PRD 什么语言就什么语言，不翻译。对照表状态只用 已实现 / 部分 / 未实现 / PRD 未提 四种，加「待核实」标记。
 - `architecture.md`：按顶层目录组织模块小节。
 - `decisions.md`：按时间倒序。
@@ -181,7 +207,20 @@ node "$CCH"/bin/harvest.js "<sessions.dir>" --min-score 5
   ```
 
   并在同目录 `MEMORY.md` 末尾加一行 `- [<标题>](<文件名>) — <一句话>`；`MEMORY.md` 不存在就新建。目标文件名已存在就跳过。
-- 每个生成文件末尾加页脚：
+
+  Codex 下没有会话 agent，也就没有 `user` / `feedback` 类输入，因此不写 memory。Codex 自己的 memory 存在 SQLite（`memories_1.sqlite`），本 skill 不碰。
+
+- `CLAUDE.md` 指针（仅 `platform.id === 'codex'` 且 `CLAUDE.md` 不存在时）：只有标题、一行指向和页脚，不重复任何规则内容——
+
+  ```markdown
+  # <项目名>
+
+  本项目的 AI 上下文规则见 [`AGENTS.md`](AGENTS.md)。
+
+  > 由 /context-curator:init 于 <YYYY-MM-DD> 生成。来源：PRD <文件名或「无」> · 代码 <git.branch>@<git.head> · 会话 跳过（Codex）。此后由项目负责人维护，可用 /curate 持续更新。
+  ```
+
+- 每个生成文件末尾加页脚（上面的 `CLAUDE.md` 指针已自带页脚，不要再贴一遍）：
 
   ```
   > 由 /context-curator:init 于 <YYYY-MM-DD> 生成。来源：PRD <文件名或「无」> · 代码 <git.branch>@<git.head> · 会话 <精读数> 个。此后由项目负责人维护，可用 /curate 持续更新。
@@ -195,6 +234,8 @@ node "$CCH"/bin/harvest.js "<sessions.dir>" --min-score 5
 - 全部会话 agent 都返回空时，不生成 `decisions.md`，进报告的「未生成（证据不足）」。
 
 ### 第 9 步：记状态
+
+`platform.id === 'codex'` 时跳过本步（`sessions.dir` 为 `null`，没有 `$CC` 可写）。
 
 非 dry-run 且 `sessions.dir` 非空时：
 
@@ -211,6 +252,7 @@ node "$CCH"/bin/state.js init-done "$CC"
 ✅ 上下文资产初始化完成
 
 信息源
+  平台     <codex | claude>（判据：<platform.evidence>）
   PRD      <文件>（<N> 节）/ 无
   代码     <主语言> <文件数> 文件 · <branch>@<head>
   会话     精读 <n> / 共 <count>
@@ -238,7 +280,11 @@ node "$CCH"/bin/state.js init-done "$CC"
 下一步：攒几个会话后跑 /curate 结算 持续养护。
 ```
 
+Codex 下「会话」那行写成 `跳过（Codex 会话存 SQLite thread history，暂不支持挖掘）`，不要写 `0 / 0`——那会让人以为探测坏了。「写入」段里 `AGENTS.md` 与 `CLAUDE.md` 各占一行，指针那行标注「指针」。
+
 `CLAUDE.md` 因已存在被跳过时，在「待你处理」里建议用户在其中加一行指向 `docs/context/`，或交给 `/curate`。
+
+Codex 下 `AGENTS.md` 已存在被跳过时，同样在「待你处理」里建议用户往其中加一行指向 `docs/context/`，或交给 `/curate`。
 
 ## 反模式
 
@@ -248,3 +294,5 @@ node "$CCH"/bin/state.js init-done "$CC"
 - ❌ 把 PRD 事实写进 `CLAUDE.md`（那是 `docs/context/` 的活）
 - ❌ 目标文件已存在还「顺手合并一下」——一个字都不改
 - ❌ 没有会话记录时硬生成一份空的 `decisions.md`
+- ❌ Codex 下看到 `sessions.count` 为 0 就以为探测坏了，转而去乱翻目录找会话记录
+- ❌ Codex 下把 `AGENTS.md` 的内容也抄一份进 `CLAUDE.md`——那里只放一行指针
