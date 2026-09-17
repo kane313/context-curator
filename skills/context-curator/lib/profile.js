@@ -1,5 +1,6 @@
 'use strict';
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const paths = require('./paths');
@@ -8,6 +9,61 @@ const { parseManifests, suggestCommands } = require('./manifests');
 const { walk, detectEntrypoints, IGNORED } = require('./walk');
 
 // 项目探测：只读项目，只输出事实。这里没有任何写文件的能力,也不该有。
+
+// 路径前缀比较必须按 path.sep 边界走,否则 ~/.claude-backup 会被 ~/.claude 误命中。
+// path.relative 顺带处理了 Windows 盘符与 .. 归一化。
+function under(child, parent) {
+  let rel;
+  try {
+    rel = path.relative(path.resolve(parent), path.resolve(child));
+  } catch {
+    return false;
+  }
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
+// 平台判定:决定 init 的主体产物写 AGENTS.md(Codex)还是 CLAUDE.md(Claude Code)。
+// 判据按可靠性降序,命中即返回。
+//
+// 为什么 skill 安装位置排在环境变量之前:Codex 自带 skill 里 CODEX_HOME 的惯用写法是
+// ${CODEX_HOME:-$HOME/.codex},带 :- 兜底说明 Codex 不保证把它注入子进程,不能单独依赖;
+// 而 base directory 是「谁在加载我」的直接证据。CODEX_PLUGIN_ROOT 这个变量在 Codex 里
+// 根本不存在(0.154 二进制里只有裸的 PLUGIN_ROOT,且那是 MCP stdio 配置的路径占位符),
+// 别再往回加。
+function detectPlatform(baseDir, opts = {}) {
+  const env = opts.env || process.env;
+  let home = opts.home;
+  if (!home) {
+    try {
+      home = os.homedir();
+    } catch {
+      home = '';
+    }
+  }
+  if (opts.override === 'codex' || opts.override === 'claude') {
+    return { id: opts.override, evidence: '用户显式指定' };
+  }
+  const codexHome = env.CODEX_HOME || (home ? path.join(home, '.codex') : '');
+  const base = typeof baseDir === 'string' && baseDir ? baseDir : null;
+  if (base && home) {
+    if (under(base, path.join(home, '.agents', 'skills'))) {
+      return { id: 'codex', evidence: 'skill 装在 ~/.agents/skills/ 下' };
+    }
+    if (codexHome && under(base, path.join(codexHome, 'skills'))) {
+      return { id: 'codex', evidence: 'skill 装在 <CODEX_HOME>/skills/ 下' };
+    }
+    if (under(base, path.join(home, '.claude'))) {
+      return { id: 'claude', evidence: 'skill 装在 ~/.claude/ 下' };
+    }
+  }
+  if (env.CODEX_HOME && !env.CLAUDE_PLUGIN_ROOT && !env.CLAUDE_CONFIG_DIR) {
+    return { id: 'codex', evidence: '环境变量 CODEX_HOME 存在,且无 CLAUDE_* 变量' };
+  }
+  if (env.CLAUDE_PLUGIN_ROOT || env.CLAUDE_CONFIG_DIR) {
+    return { id: 'claude', evidence: '环境变量 CLAUDE_PLUGIN_ROOT / CLAUDE_CONFIG_DIR 存在' };
+  }
+  return { id: 'claude', evidence: '默认(无判据命中)' };
+}
 
 function existsRel(root, rel) {
   try {
@@ -195,4 +251,4 @@ function profileProject(root, opts = {}) {
   };
 }
 
-module.exports = { detectTooling, contextAssets, gitInfo, sessionInfo, profileProject };
+module.exports = { under, detectPlatform, detectTooling, contextAssets, gitInfo, sessionInfo, profileProject };
